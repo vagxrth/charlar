@@ -9,7 +9,9 @@ import { env } from "./env";
 
 export async function fetchIceServers(): Promise<RTCIceServer[]> {
   try {
-    const res = await fetch(`${env.serverUrl}/api/ice-config`);
+    const res = await fetch(`${env.serverUrl}/api/ice-config`, {
+      signal: AbortSignal.timeout(5_000),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { iceServers?: RTCIceServer[] };
     return data.iceServers ?? [];

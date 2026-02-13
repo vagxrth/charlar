@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { useSocket } from "../../../../_lib/socket-context";
 import type { ChatMessage } from "../_hooks/use-chat";
 
@@ -15,7 +15,7 @@ function shortId(id: string): string {
   return id.slice(0, 8);
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
 }: {
@@ -53,7 +53,7 @@ function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 export function MessageList({ messages }: { messages: ChatMessage[] }) {
   const { sessionId } = useSocket();

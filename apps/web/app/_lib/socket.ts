@@ -22,6 +22,9 @@ export function getSocket(): Socket {
     auth: (cb) => {
       cb({ sessionId });
     },
+    // Reconnection tuning for production (mobile networks, deploys)
+    reconnectionDelay: 1_000,
+    reconnectionDelayMax: 10_000,
   });
 
   socket.on("session:created", (data: { sessionId: string }) => {

@@ -1,18 +1,20 @@
 import { chatService, typingService } from "../../services/index.js";
-import { getSessionId, type SocketHandler } from "../types.js";
+import { RoomService } from "../../services/room-service.js";
+import { ensureCallback, getSessionId, type SocketHandler } from "../types.js";
 
 export const chatHandler: SocketHandler = (_io, socket) => {
   socket.on(
     "chat:message",
     (
       payload: { roomCode: unknown; content: unknown },
-      callback: (res: unknown) => void
+      rawCallback: unknown
     ) => {
+      const callback = ensureCallback(rawCallback);
       const sessionId = getSessionId(socket);
       const result = chatService.processMessage(
-        payload.roomCode,
+        payload?.roomCode,
         sessionId,
-        payload.content
+        payload?.content
       );
 
       if (!result.ok) {
@@ -40,7 +42,14 @@ export const chatHandler: SocketHandler = (_io, socket) => {
 
   socket.on(
     "typing:start",
-    (roomCode: string, callback: (res: unknown) => void) => {
+    (roomCode: unknown, rawCallback: unknown) => {
+      const callback = ensureCallback(rawCallback);
+
+      if (!RoomService.isValidCode(roomCode)) {
+        callback({ ok: false, error: "Invalid room code" });
+        return;
+      }
+
       const sessionId = getSessionId(socket);
       const result = typingService.startTyping(roomCode, sessionId);
 
@@ -49,19 +58,26 @@ export const chatHandler: SocketHandler = (_io, socket) => {
         return;
       }
 
-      socket.to(roomCode).emit("typing:start", { sessionId });
+      socket.volatile.to(roomCode).emit("typing:start", { sessionId });
       callback({ ok: true });
     }
   );
 
   socket.on(
     "typing:stop",
-    (roomCode: string, callback: (res: unknown) => void) => {
+    (roomCode: unknown, rawCallback: unknown) => {
+      const callback = ensureCallback(rawCallback);
+
+      if (!RoomService.isValidCode(roomCode)) {
+        callback({ ok: false, error: "Invalid room code" });
+        return;
+      }
+
       const sessionId = getSessionId(socket);
       const stopped = typingService.stopTyping(roomCode, sessionId);
 
       if (stopped) {
-        socket.to(roomCode).emit("typing:stop", { sessionId });
+        socket.volatile.to(roomCode).emit("typing:stop", { sessionId });
       }
 
       callback({ ok: true });

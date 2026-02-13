@@ -1,4 +1,5 @@
 import { config } from "../config/env.js";
+import { logger } from "../logger.js";
 import { ChatService } from "./chat-service.js";
 import { IceConfigService } from "./ice-config-service.js";
 import { PresenceService } from "./presence-service.js";
@@ -11,6 +12,18 @@ export const chatService = new ChatService(roomService);
 export const typingService = new TypingService(roomService);
 
 /**
+ * Deferred notification callback — set by the socket layer once `io` exists.
+ * Called after cleanup so the socket layer can emit `room:peer-left` events.
+ */
+let notifySessionExpired: ((sessionId: string, leftCodes: string[]) => void) | null = null;
+
+export function setSessionExpiryNotifier(
+  fn: (sessionId: string, leftCodes: string[]) => void
+): void {
+  notifySessionExpired = fn;
+}
+
+/**
  * When a session's grace period expires without reconnection,
  * evict it from every room and clean up transient state.
  */
@@ -20,11 +33,15 @@ export const sessionService = new SessionService(
     const codes = roomService.removeFromAll(sessionId);
     chatService.clearSession(sessionId);
     typingService.clearSession(sessionId);
-    for (const code of codes) {
-      console.log(
-        `[session] expired ${sessionId.slice(0, 8)}… — removed from room ${code}`
+
+    if (codes.length > 0) {
+      logger.info(
+        { session: sessionId.slice(0, 8), rooms: codes },
+        "session expired, removed from rooms"
       );
     }
+
+    notifySessionExpired?.(sessionId, codes);
   }
 );
 

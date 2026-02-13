@@ -13,6 +13,7 @@ export interface ChatMessage {
 }
 
 const TYPING_DEBOUNCE_MS = 2_000;
+const MAX_MESSAGES = 500;
 
 export function useChat() {
   const { socket, sessionId } = useSocket();
@@ -32,7 +33,10 @@ export function useChat() {
       content: string;
       timestamp: number;
     }) {
-      setMessages((prev) => [...prev, data]);
+      setMessages((prev) => {
+        const next = [...prev, data];
+        return next.length > MAX_MESSAGES ? next.slice(-MAX_MESSAGES) : next;
+      });
     }
 
     socket.on("chat:message", onMessage);
@@ -91,7 +95,10 @@ export function useChat() {
         pending: true,
       };
 
-      setMessages((prev) => [...prev, optimistic]);
+      setMessages((prev) => {
+        const next = [...prev, optimistic];
+        return next.length > MAX_MESSAGES ? next.slice(-MAX_MESSAGES) : next;
+      });
 
       // Stop typing on send
       if (isTyping.current) {

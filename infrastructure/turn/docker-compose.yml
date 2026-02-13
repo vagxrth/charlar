@@ -1,0 +1,27 @@
+services:
+  coturn:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+
+    # Host networking is simplest for UDP relay — no port mapping needed.
+    network_mode: host
+
+    # Alternative: explicit port mapping (uncomment and remove network_mode above)
+    # ports:
+    #   - "3478:3478/tcp"
+    #   - "3478:3478/udp"
+    #   - "5349:5349/tcp"
+    #   - "5349:5349/udp"
+    #   - "49152-65535:49152-65535/udp"
+
+    # Mount TLS certificates for TURNS (uncomment for production)
+    # volumes:
+    #   - /etc/letsencrypt/live/turn.example.com:/etc/turn/certs:ro
+
+    healthcheck:
+      test: ["CMD", "turnadmin", "-p", "3478"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

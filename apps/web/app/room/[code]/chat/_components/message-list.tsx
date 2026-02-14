@@ -75,13 +75,24 @@ export function MessageList({ messages }: { messages: ChatMessage[] }) {
 
   return (
     <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
-      {messages.map((msg) => (
-        <MessageBubble
-          key={msg.id}
-          message={msg}
-          isOwn={msg.sessionId === sessionId}
-        />
-      ))}
+      {messages.map((msg) =>
+        msg.type === "system" ? (
+          <div key={msg.id} className="flex justify-center py-1">
+            <span
+              className="rounded-full px-3 py-1 text-xs"
+              style={{ background: "var(--surface)", color: "var(--muted)" }}
+            >
+              {msg.content}
+            </span>
+          </div>
+        ) : (
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            isOwn={msg.sessionId === sessionId}
+          />
+        )
+      )}
       <div ref={bottomRef} />
     </div>
   );

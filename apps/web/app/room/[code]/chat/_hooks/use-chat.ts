@@ -11,6 +11,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   pending?: boolean;
+  type?: "user" | "system";
 }
 
 const TYPING_DEBOUNCE_MS = 2_000;
@@ -46,6 +47,30 @@ export function useChat() {
       socket.off("chat:message", onMessage);
     };
   }, [socket]);
+
+  // ── System messages for peer leave ──────────────────
+  useEffect(() => {
+    function onPeerLeft(data: { sessionId: string; nickname?: string }) {
+      if (data.sessionId === sessionId) return;
+      const name = data.nickname ?? data.sessionId.slice(0, 8);
+      const msg: ChatMessage = {
+        id: crypto.randomUUID(),
+        sessionId: data.sessionId,
+        content: `${name} has left the room`,
+        timestamp: Date.now(),
+        type: "system",
+      };
+      setMessages((prev) => {
+        const next = [...prev, msg];
+        return next.length > MAX_MESSAGES ? next.slice(-MAX_MESSAGES) : next;
+      });
+    }
+
+    socket.on("room:peer-left", onPeerLeft);
+    return () => {
+      socket.off("room:peer-left", onPeerLeft);
+    };
+  }, [socket, sessionId]);
 
   // ── Receive typing indicators ────────────────────────
   useEffect(() => {

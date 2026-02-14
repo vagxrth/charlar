@@ -48,15 +48,13 @@ export function useChat() {
     };
   }, [socket]);
 
-  // ── System messages for peer leave ──────────────────
+  // ── System messages for peer join/leave ──────────────
   useEffect(() => {
-    function onPeerLeft(data: { sessionId: string; nickname?: string }) {
-      if (data.sessionId === sessionId) return;
-      const name = data.nickname ?? data.sessionId.slice(0, 8);
+    function addSystemMessage(data: { sessionId: string; nickname?: string }, text: string) {
       const msg: ChatMessage = {
         id: crypto.randomUUID(),
         sessionId: data.sessionId,
-        content: `${name} has left the room`,
+        content: text,
         timestamp: Date.now(),
         type: "system",
       };
@@ -66,8 +64,22 @@ export function useChat() {
       });
     }
 
+    function onPeerJoined(data: { sessionId: string; nickname?: string }) {
+      if (data.sessionId === sessionId) return;
+      const name = data.nickname ?? data.sessionId.slice(0, 8);
+      addSystemMessage(data, `${name} has joined the room`);
+    }
+
+    function onPeerLeft(data: { sessionId: string; nickname?: string }) {
+      if (data.sessionId === sessionId) return;
+      const name = data.nickname ?? data.sessionId.slice(0, 8);
+      addSystemMessage(data, `${name} has left the room`);
+    }
+
+    socket.on("room:peer-joined", onPeerJoined);
     socket.on("room:peer-left", onPeerLeft);
     return () => {
+      socket.off("room:peer-joined", onPeerJoined);
       socket.off("room:peer-left", onPeerLeft);
     };
   }, [socket, sessionId]);

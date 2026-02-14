@@ -38,7 +38,7 @@ const MessageBubble = memo(function MessageBubble({
             className="text-[10px] font-medium"
             style={{ color: isOwn ? "rgba(255,255,255,0.7)" : "var(--muted)" }}
           >
-            {shortId(message.sessionId)}
+            {message.nickname ?? shortId(message.sessionId)}
           </span>
         )}
         <p className="whitespace-pre-wrap break-words text-sm">

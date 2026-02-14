@@ -1,4 +1,4 @@
-import { chatService, typingService } from "../../services/index.js";
+import { chatService, sessionService, typingService } from "../../services/index.js";
 import { RoomService } from "../../services/room-service.js";
 import { ensureCallback, getSessionId, type SocketHandler } from "../types.js";
 
@@ -23,6 +23,7 @@ export const chatHandler: SocketHandler = (_io, socket) => {
       }
 
       const { id, roomCode, content, timestamp } = result.data;
+      const nickname = sessionService.getById(sessionId)?.nickname ?? null;
 
       // Sending a message implicitly stops the typing indicator
       typingService.stopTyping(roomCode, sessionId);
@@ -30,6 +31,7 @@ export const chatHandler: SocketHandler = (_io, socket) => {
       socket.to(roomCode).emit("chat:message", {
         id,
         sessionId,
+        nickname,
         content,
         timestamp,
       });

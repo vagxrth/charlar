@@ -14,6 +14,7 @@ export function RoomForm() {
   const router = useRouter();
   const { status } = useSocket();
   const { createRoom, joinRoom } = useRoom();
+  const [nickname, setNickname] = useState("");
   const [mode, setMode] = useState<Mode>("chat");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -33,7 +34,7 @@ export function RoomForm() {
     setError("");
 
     try {
-      const roomCode = await createRoom(mode);
+      const roomCode = await createRoom(mode, nickname);
       router.push(`/room/${roomCode}/${mode}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create room");
@@ -54,7 +55,7 @@ export function RoomForm() {
     setError("");
 
     try {
-      await joinRoom(code, mode);
+      await joinRoom(code, mode, nickname);
       router.push(`/room/${code}/${mode}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to join room");
@@ -64,6 +65,39 @@ export function RoomForm() {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-8">
+      {/* ── Nickname ─────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="nickname"
+          className="text-xs font-medium"
+          style={{ color: "var(--muted)" }}
+        >
+          Nickname
+        </label>
+        <input
+          id="nickname"
+          type="text"
+          autoComplete="off"
+          placeholder="Guest"
+          value={nickname}
+          onChange={(e) => setNickname(e.target.value)}
+          maxLength={20}
+          disabled={disabled}
+          className="rounded-xl border px-4 py-3 text-sm outline-none transition-colors placeholder:text-sm disabled:opacity-50"
+          style={{
+            borderColor: "var(--border)",
+            background: "var(--surface)",
+            color: "var(--foreground)",
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = "var(--accent)";
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = "var(--border)";
+          }}
+        />
+      </div>
+
       {/* ── Mode selection ──────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
         <button

@@ -7,6 +7,7 @@ import { useSocket } from "../../../../_lib/socket-context";
 export interface ChatMessage {
   id: string;
   sessionId: string;
+  nickname?: string;
   content: string;
   timestamp: number;
   pending?: boolean;
@@ -30,6 +31,7 @@ export function useChat() {
     function onMessage(data: {
       id: string;
       sessionId: string;
+      nickname?: string;
       content: string;
       timestamp: number;
     }) {
@@ -90,6 +92,7 @@ export function useChat() {
       const optimistic: ChatMessage = {
         id: tempId,
         sessionId,
+        nickname: room?.nickname,
         content,
         timestamp: Date.now(),
         pending: true,

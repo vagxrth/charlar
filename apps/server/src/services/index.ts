@@ -15,10 +15,10 @@ export const typingService = new TypingService(roomService);
  * Deferred notification callback — set by the socket layer once `io` exists.
  * Called after cleanup so the socket layer can emit `room:peer-left` events.
  */
-let notifySessionExpired: ((sessionId: string, leftCodes: string[]) => void) | null = null;
+let notifySessionExpired: ((sessionId: string, nickname: string | null, leftCodes: string[]) => void) | null = null;
 
 export function setSessionExpiryNotifier(
-  fn: (sessionId: string, leftCodes: string[]) => void
+  fn: (sessionId: string, nickname: string | null, leftCodes: string[]) => void
 ): void {
   notifySessionExpired = fn;
 }
@@ -29,7 +29,7 @@ export function setSessionExpiryNotifier(
  */
 export const sessionService = new SessionService(
   config.reconnectTimeoutMs,
-  (sessionId) => {
+  (sessionId, nickname) => {
     const codes = roomService.removeFromAll(sessionId);
     chatService.clearSession(sessionId);
     typingService.clearSession(sessionId);
@@ -41,7 +41,7 @@ export const sessionService = new SessionService(
       );
     }
 
-    notifySessionExpired?.(sessionId, codes);
+    notifySessionExpired?.(sessionId, nickname, codes);
   }
 );
 

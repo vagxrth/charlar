@@ -34,6 +34,11 @@ export function RoomHeader() {
           {room.participantCount}{" "}
           {room.participantCount === 1 ? "participant" : "participants"}
         </span>
+        {room.nickname && (
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            as <span className="font-medium" style={{ color: "var(--foreground)" }}>{room.nickname}</span>
+          </span>
+        )}
       </div>
 
       <button

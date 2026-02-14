@@ -25,7 +25,7 @@ export function PresenceBar() {
           style={{ background: "#22c55e" }}
         />
         <span className="text-xs font-medium">
-          You
+          {room.nickname ?? "You"}
         </span>
       </div>
 
@@ -42,7 +42,7 @@ export function PresenceBar() {
               className="text-xs"
               style={{ color: p.online ? "var(--foreground)" : "var(--muted)" }}
             >
-              {shortId(p.sessionId)}
+              {p.nickname ?? shortId(p.sessionId)}
               {!p.online && (
                 <span className="ml-1 text-[10px]" style={{ color: "var(--muted)" }}>
                   (offline)

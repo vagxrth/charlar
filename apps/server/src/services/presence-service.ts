@@ -4,6 +4,7 @@ import type { SessionService } from "./session-service.js";
 export interface ParticipantInfo {
   sessionId: string;
   online: boolean;
+  nickname: string;
 }
 
 export class PresenceService {
@@ -26,10 +27,14 @@ export class PresenceService {
     }
 
     const participants: ParticipantInfo[] = [...room.participants].map(
-      (sessionId) => ({
-        sessionId,
-        online: this.sessionService.getById(sessionId)?.socketId !== null,
-      })
+      (sessionId) => {
+        const session = this.sessionService.getById(sessionId);
+        return {
+          sessionId,
+          online: session?.socketId !== null,
+          nickname: session?.nickname ?? "Unknown",
+        };
+      }
     );
 
     return { ok: true, data: participants };

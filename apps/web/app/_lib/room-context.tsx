@@ -16,19 +16,21 @@ type Mode = "chat" | "video";
 interface Participant {
   sessionId: string;
   online: boolean;
+  nickname: string;
 }
 
 interface RoomState {
   code: string;
   mode: Mode;
+  nickname: string;
   participants: Participant[];
   participantCount: number;
 }
 
 interface RoomContextValue {
   room: RoomState | null;
-  createRoom: (mode: Mode) => Promise<string>;
-  joinRoom: (code: string, mode: Mode) => Promise<void>;
+  createRoom: (mode: Mode, nickname?: string) => Promise<string>;
+  joinRoom: (code: string, mode: Mode, nickname?: string) => Promise<void>;
   leaveRoom: () => void;
 }
 
@@ -41,11 +43,12 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   roomRef.current = room;
 
   const createRoom = useCallback(
-    (mode: Mode): Promise<string> =>
+    (mode: Mode, nickname?: string): Promise<string> =>
       new Promise((resolve, reject) => {
         socket.emit(
           "room:create",
-          (res: { ok: boolean; code?: string; error?: string }) => {
+          nickname ?? "",
+          (res: { ok: boolean; code?: string; nickname?: string; error?: string }) => {
             if (!res.ok || !res.code) {
               reject(new Error(res.error ?? "Failed to create room"));
               return;
@@ -53,6 +56,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             setRoom({
               code: res.code,
               mode,
+              nickname: res.nickname ?? "Guest",
               participants: [],
               participantCount: 1,
             });
@@ -64,14 +68,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   );
 
   const joinRoom = useCallback(
-    (code: string, mode: Mode): Promise<void> =>
+    (code: string, mode: Mode, nickname?: string): Promise<void> =>
       new Promise((resolve, reject) => {
         socket.emit(
           "room:join",
           code,
+          nickname ?? "",
           (res: {
             ok: boolean;
             error?: string;
+            nickname?: string;
             participantCount?: number;
             participants?: Participant[];
           }) => {
@@ -82,6 +88,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             setRoom({
               code,
               mode,
+              nickname: res.nickname ?? "Guest",
               participants: res.participants ?? [],
               participantCount: res.participantCount ?? 1,
             });
@@ -104,6 +111,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     function onPeerJoined(data: {
       sessionId: string;
+      nickname?: string;
       participantCount: number;
     }) {
       setRoom((prev) => {
@@ -118,7 +126,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             ? prev.participants
             : [
                 ...prev.participants,
-                { sessionId: data.sessionId, online: true },
+                { sessionId: data.sessionId, online: true, nickname: data.nickname ?? "Unknown" },
               ],
         };
       });

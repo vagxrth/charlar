@@ -71,6 +71,18 @@ export function VideoRoom({ code }: { code: string }) {
           className="absolute inset-0 h-full w-full object-cover"
         />
 
+        {/* Remote nickname label */}
+        {remoteStream && room?.participants.find((p) => p.sessionId !== undefined) && (
+          <div
+            className="absolute bottom-24 left-4 z-10 rounded-md px-2 py-1"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+          >
+            <span className="text-xs font-medium text-white">
+              {room.participants.find((p) => p.online)?.nickname ?? "Peer"}
+            </span>
+          </div>
+        )}
+
         {/* Top overlay bar */}
         <div
           className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pb-12 pt-4"
@@ -180,6 +192,15 @@ export function VideoRoom({ code }: { code: string }) {
               style={{ transform: "scaleX(-1)" }}
             />
           )}
+          {/* Local nickname label */}
+          <div
+            className="absolute bottom-1 left-1 rounded px-1.5 py-0.5"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+          >
+            <span className="text-[10px] font-medium text-white">
+              {room?.nickname ?? "You"}
+            </span>
+          </div>
         </div>
 
         {/* Bottom controls */}

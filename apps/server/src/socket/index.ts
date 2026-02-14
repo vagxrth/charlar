@@ -114,10 +114,10 @@ export function initSocket(httpServer: HttpServer): Server {
   });
 
   // Notify remaining room members when a session's grace period expires
-  setSessionExpiryNotifier((sessionId, codes) => {
+  setSessionExpiryNotifier((sessionId, nickname, codes) => {
     for (const code of codes) {
       const participantCount = presenceService.getParticipantCount(code);
-      io.to(code).emit("room:peer-left", { sessionId, participantCount });
+      io.to(code).emit("room:peer-left", { sessionId, nickname, participantCount });
     }
   });
 
@@ -176,11 +176,13 @@ export function initSocket(httpServer: HttpServer): Server {
     if (reconnected) {
       // Rejoin Socket.IO rooms and notify peers
       const codes = roomService.getRoomsBySession(sessionId);
+      const nickname = sessionService.getById(sessionId)?.nickname ?? null;
       for (const code of codes) {
         void socket.join(code);
         const participantCount = presenceService.getParticipantCount(code);
         socket.volatile.to(code).emit("room:peer-reconnected", {
           sessionId,
+          nickname,
           participantCount,
         });
       }
@@ -214,6 +216,7 @@ export function initSocket(httpServer: HttpServer): Server {
           const participantCount = presenceService.getParticipantCount(code);
           socket.volatile.to(code).emit("room:peer-disconnected", {
             sessionId: session.id,
+            nickname: session.nickname,
             participantCount,
           });
         }

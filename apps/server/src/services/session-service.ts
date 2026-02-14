@@ -5,6 +5,37 @@ export interface Session {
   socketId: string | null;
   disconnectedAt: number | null;
   cleanupTimer: ReturnType<typeof setTimeout> | null;
+  nickname: string | null;
+}
+
+// ── Nickname validation ──────────────────────────────────
+
+const NICKNAME_PATTERN = /^[a-zA-Z0-9 _-]+$/;
+const MIN_LENGTH = 2;
+const MAX_LENGTH = 20;
+
+function generateGuestName(): string {
+  const hex = randomUUID().replace(/-/g, "").slice(0, 4).toUpperCase();
+  return `Guest-${hex}`;
+}
+
+export function validateAndNormalizeNickname(
+  raw: unknown
+): { ok: true; nickname: string } | { ok: false; fallback: string } {
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return { ok: false, fallback: generateGuestName() };
+  }
+
+  const trimmed = raw.trim();
+  if (
+    trimmed.length < MIN_LENGTH ||
+    trimmed.length > MAX_LENGTH ||
+    !NICKNAME_PATTERN.test(trimmed)
+  ) {
+    return { ok: false, fallback: generateGuestName() };
+  }
+
+  return { ok: true, nickname: trimmed };
 }
 
 export class SessionService {
@@ -13,7 +44,7 @@ export class SessionService {
 
   constructor(
     private readonly reconnectTimeoutMs: number,
-    private readonly onSessionExpired: (sessionId: string) => void
+    private readonly onSessionExpired: (sessionId: string, nickname: string | null) => void
   ) {}
 
   /** Create a fresh session bound to a socket. */
@@ -23,6 +54,7 @@ export class SessionService {
       socketId,
       disconnectedAt: null,
       cleanupTimer: null,
+      nickname: null,
     };
 
     this.sessions.set(session.id, session);
@@ -72,9 +104,10 @@ export class SessionService {
     session.socketId = null;
     session.disconnectedAt = Date.now();
 
+    const capturedNickname = session.nickname;
     session.cleanupTimer = setTimeout(() => {
       this.destroy(session.id);
-      this.onSessionExpired(session.id);
+      this.onSessionExpired(session.id, capturedNickname);
     }, this.reconnectTimeoutMs);
 
     return session;
@@ -88,6 +121,11 @@ export class SessionService {
 
   getById(sessionId: string): Session | null {
     return this.sessions.get(sessionId) ?? null;
+  }
+
+  setNickname(sessionId: string, nickname: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session) session.nickname = nickname;
   }
 
   get size(): number {

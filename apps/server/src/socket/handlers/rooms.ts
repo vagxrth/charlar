@@ -1,6 +1,7 @@
 import { logger } from "../../logger.js";
-import { presenceService, roomService } from "../../services/index.js";
+import { presenceService, roomService, sessionService } from "../../services/index.js";
 import { RoomService } from "../../services/room-service.js";
+import { validateAndNormalizeNickname } from "../../services/session-service.js";
 import { ensureCallback, getSessionId, type SocketHandler } from "../types.js";
 
 // ── Join attempt rate limiting (brute-force prevention) ──
@@ -45,8 +46,35 @@ setInterval(() => {
   }
 }, 5 * 60_000).unref();
 
+function resolveNickname(raw: unknown): string {
+  const result = validateAndNormalizeNickname(raw);
+  return result.ok ? result.nickname : result.fallback;
+}
+
+function deduplicateNickname(roomCode: string, nickname: string): string {
+  const room = roomService.getRoom(roomCode);
+  if (!room) return nickname;
+
+  const existing = new Set<string>();
+  for (const sid of room.participants) {
+    const s = sessionService.getById(sid);
+    if (s?.nickname) existing.add(s.nickname);
+  }
+
+  if (!existing.has(nickname)) return nickname;
+
+  let suffix = 2;
+  while (existing.has(`${nickname}${suffix}`)) suffix++;
+  return `${nickname}${suffix}`;
+}
+
 export const roomsHandler: SocketHandler = (io, socket) => {
-  socket.on("room:create", (rawCallback: unknown) => {
+  socket.on("room:create", (rawNickname: unknown, rawCallback: unknown) => {
+    // Support old signature without nickname: (callback)
+    if (typeof rawNickname === "function") {
+      rawCallback = rawNickname;
+      rawNickname = undefined;
+    }
     const callback = ensureCallback(rawCallback);
     const sessionId = getSessionId(socket);
     const result = roomService.createRoom(sessionId);
@@ -56,15 +84,23 @@ export const roomsHandler: SocketHandler = (io, socket) => {
       return;
     }
 
+    const nickname = resolveNickname(rawNickname);
+    sessionService.setNickname(sessionId, nickname);
+
     const { code } = result.data;
     void socket.join(code);
-    logger.info({ session: sessionId.slice(0, 8), room: code }, "room created");
-    callback({ ok: true, code, participantCount: 1 });
+    logger.info({ session: sessionId.slice(0, 8), room: code, nickname }, "room created");
+    callback({ ok: true, code, participantCount: 1, nickname });
   });
 
   socket.on(
     "room:join",
-    (code: unknown, rawCallback: unknown) => {
+    (code: unknown, rawNickname: unknown, rawCallback: unknown) => {
+      // Support old signature without nickname: (code, callback)
+      if (typeof rawNickname === "function") {
+        rawCallback = rawNickname;
+        rawNickname = undefined;
+      }
       const callback = ensureCallback(rawCallback);
       const sessionId = getSessionId(socket);
 
@@ -88,16 +124,20 @@ export const roomsHandler: SocketHandler = (io, socket) => {
         return;
       }
 
+      const nickname = deduplicateNickname(code, resolveNickname(rawNickname));
+      sessionService.setNickname(sessionId, nickname);
+
       void socket.join(code);
 
       const presence = presenceService.getRoomPresence(code, sessionId);
       const participantCount = presenceService.getParticipantCount(code);
 
-      socket.to(code).emit("room:peer-joined", { sessionId, participantCount });
-      logger.info({ session: sessionId.slice(0, 8), room: code }, "room joined");
+      socket.to(code).emit("room:peer-joined", { sessionId, nickname, participantCount });
+      logger.info({ session: sessionId.slice(0, 8), room: code, nickname }, "room joined");
 
       callback({
         ok: true,
+        nickname,
         participantCount,
         participants: presence.ok ? presence.data : [],
       });
@@ -115,12 +155,13 @@ export const roomsHandler: SocketHandler = (io, socket) => {
       }
 
       const sessionId = getSessionId(socket);
+      const nickname = sessionService.getById(sessionId)?.nickname ?? null;
       roomService.leaveRoom(code, sessionId);
       void socket.leave(code);
 
       const participantCount = presenceService.getParticipantCount(code);
-      socket.to(code).emit("room:peer-left", { sessionId, participantCount });
-      logger.info({ session: sessionId.slice(0, 8), room: code }, "room left");
+      socket.to(code).emit("room:peer-left", { sessionId, nickname, participantCount });
+      logger.info({ session: sessionId.slice(0, 8), room: code, nickname }, "room left");
       callback({ ok: true });
     }
   );

@@ -1,9 +1,11 @@
 FROM coturn/coturn:latest
 
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends gettext-base && rm -rf /var/lib/apt/lists/*
+
 COPY turnserver.conf /etc/turnserver.conf.template
 
-# envsubst ships in the coturn image (via gettext-base).
-# At runtime: substitute env vars into the template, then exec turnserver.
+# envsubst substitutes env vars into the config template at runtime.
 ENTRYPOINT [ "sh", "-c", \
   "envsubst < /etc/turnserver.conf.template > /tmp/turnserver.conf && exec turnserver -c /tmp/turnserver.conf" ]
 

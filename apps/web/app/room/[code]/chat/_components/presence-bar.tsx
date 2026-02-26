@@ -15,14 +15,17 @@ export function PresenceBar() {
 
   return (
     <div
-      className="flex items-center gap-3 border-b px-4 py-2"
-      style={{ borderColor: "var(--border)" }}
+      className="flex items-center gap-3 px-5 py-2.5 animate-fade-in"
+      style={{ borderBottom: "1px solid var(--border)" }}
     >
       {/* Self */}
       <div className="flex items-center gap-1.5">
         <span
-          className="inline-block h-2 w-2 rounded-full"
-          style={{ background: "#22c55e" }}
+          className="inline-block h-1.5 w-1.5 rounded-full"
+          style={{
+            background: "var(--success)",
+            boxShadow: "0 0 5px var(--success)",
+          }}
         />
         <span className="text-xs font-medium">
           {room.nickname ?? "You"}
@@ -35,16 +38,24 @@ export function PresenceBar() {
         .map((p) => (
           <div key={p.sessionId} className="flex items-center gap-1.5">
             <span
-              className="inline-block h-2 w-2 rounded-full"
-              style={{ background: p.online ? "#22c55e" : "var(--muted)" }}
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{
+                background: p.online ? "var(--success)" : "var(--muted)",
+                boxShadow: p.online ? "0 0 5px var(--success)" : "none",
+              }}
             />
             <span
               className="text-xs"
-              style={{ color: p.online ? "var(--foreground)" : "var(--muted)" }}
+              style={{
+                color: p.online ? "var(--foreground)" : "var(--muted)",
+              }}
             >
               {p.nickname ?? shortId(p.sessionId)}
               {!p.online && (
-                <span className="ml-1 text-[10px]" style={{ color: "var(--muted)" }}>
+                <span
+                  className="ml-1 text-[10px]"
+                  style={{ color: "var(--muted)" }}
+                >
                   (offline)
                 </span>
               )}

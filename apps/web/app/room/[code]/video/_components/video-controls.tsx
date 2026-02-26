@@ -17,27 +17,38 @@ export function VideoControls({
 }: VideoControlsProps) {
   return (
     <div
-      className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-4 pb-8 pt-16"
+      className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-4 pb-8 pt-16 animate-fade-in"
       style={{
         background:
-          "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%)",
+          "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%)",
+        animationDelay: "0.2s",
       }}
     >
       {/* Mic toggle */}
       <button
         type="button"
         onClick={onToggleAudio}
-        className="flex h-12 w-12 items-center justify-center rounded-full transition-colors"
+        className="flex h-12 w-12 items-center justify-center rounded-full transition-all duration-200"
         style={{
-          background: isAudioMuted ? "var(--error)" : "rgba(255,255,255,0.2)",
+          background: isAudioMuted
+            ? "var(--error)"
+            : "rgba(255,255,255,0.15)",
+          backdropFilter: "blur(12px)",
+          border: isAudioMuted
+            ? "none"
+            : "1px solid rgba(255,255,255,0.1)",
         }}
         onMouseEnter={(e) => {
-          if (!isAudioMuted)
-            e.currentTarget.style.background = "rgba(255,255,255,0.3)";
+          if (!isAudioMuted) {
+            e.currentTarget.style.background = "rgba(255,255,255,0.25)";
+            e.currentTarget.style.transform = "scale(1.06)";
+          }
         }}
         onMouseLeave={(e) => {
-          if (!isAudioMuted)
-            e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+          if (!isAudioMuted) {
+            e.currentTarget.style.background = "rgba(255,255,255,0.15)";
+            e.currentTarget.style.transform = "scale(1)";
+          }
         }}
         aria-label={isAudioMuted ? "Unmute microphone" : "Mute microphone"}
       >
@@ -48,7 +59,7 @@ export function VideoControls({
             viewBox="0 0 24 24"
             fill="none"
             stroke="white"
-            strokeWidth="2"
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           >
@@ -65,7 +76,7 @@ export function VideoControls({
             viewBox="0 0 24 24"
             fill="none"
             stroke="white"
-            strokeWidth="2"
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           >
@@ -81,17 +92,27 @@ export function VideoControls({
       <button
         type="button"
         onClick={onToggleVideo}
-        className="flex h-12 w-12 items-center justify-center rounded-full transition-colors"
+        className="flex h-12 w-12 items-center justify-center rounded-full transition-all duration-200"
         style={{
-          background: isVideoOff ? "var(--error)" : "rgba(255,255,255,0.2)",
+          background: isVideoOff
+            ? "var(--error)"
+            : "rgba(255,255,255,0.15)",
+          backdropFilter: "blur(12px)",
+          border: isVideoOff
+            ? "none"
+            : "1px solid rgba(255,255,255,0.1)",
         }}
         onMouseEnter={(e) => {
-          if (!isVideoOff)
-            e.currentTarget.style.background = "rgba(255,255,255,0.3)";
+          if (!isVideoOff) {
+            e.currentTarget.style.background = "rgba(255,255,255,0.25)";
+            e.currentTarget.style.transform = "scale(1.06)";
+          }
         }}
         onMouseLeave={(e) => {
-          if (!isVideoOff)
-            e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+          if (!isVideoOff) {
+            e.currentTarget.style.background = "rgba(255,255,255,0.15)";
+            e.currentTarget.style.transform = "scale(1)";
+          }
         }}
         aria-label={isVideoOff ? "Turn on camera" : "Turn off camera"}
       >
@@ -102,7 +123,7 @@ export function VideoControls({
             viewBox="0 0 24 24"
             fill="none"
             stroke="white"
-            strokeWidth="2"
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           >
@@ -116,7 +137,7 @@ export function VideoControls({
             viewBox="0 0 24 24"
             fill="none"
             stroke="white"
-            strokeWidth="2"
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           >
@@ -130,14 +151,16 @@ export function VideoControls({
       <button
         type="button"
         onClick={onLeave}
-        className="flex h-12 w-12 items-center justify-center rounded-full transition-colors"
+        className="flex h-12 w-12 items-center justify-center rounded-full transition-all duration-200"
         style={{ background: "var(--error)" }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.background = "var(--accent-hover)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.background = "var(--error)")
-        }
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "scale(1.06)";
+          e.currentTarget.style.boxShadow = "0 0 20px rgba(220,60,60,0.4)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "scale(1)";
+          e.currentTarget.style.boxShadow = "none";
+        }}
         aria-label="Leave call"
       >
         <svg
@@ -146,7 +169,7 @@ export function VideoControls({
           viewBox="0 0 24 24"
           fill="none"
           stroke="white"
-          strokeWidth="2"
+          strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         >

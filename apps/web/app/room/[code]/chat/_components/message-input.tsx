@@ -38,8 +38,11 @@ export function MessageInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex items-end gap-2 border-t p-3"
-      style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+      className="flex items-end gap-2 px-4 py-3"
+      style={{
+        borderTop: "1px solid var(--border)",
+        background: "var(--surface)",
+      }}
     >
       <textarea
         value={value}
@@ -48,30 +51,37 @@ export function MessageInput({
         placeholder="Type a message..."
         disabled={disabled}
         rows={1}
-        className="flex-1 resize-none rounded-lg border px-3 py-2 text-sm outline-none transition-colors placeholder:text-[var(--muted)] disabled:opacity-50"
+        className="flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 placeholder:text-[var(--muted)] disabled:opacity-50"
         style={{
           borderColor: "var(--border)",
           background: "var(--background)",
           color: "var(--foreground)",
         }}
-        onFocus={(e) =>
-          (e.currentTarget.style.borderColor = "var(--accent)")
-        }
-        onBlur={(e) =>
-          (e.currentTarget.style.borderColor = "var(--border)")
-        }
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = "var(--accent)";
+          e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-soft)";
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = "var(--border)";
+          e.currentTarget.style.boxShadow = "none";
+        }}
       />
       <button
         type="submit"
         disabled={disabled || value.trim().length === 0}
-        className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-40"
-        style={{ background: "var(--accent)" }}
+        className="rounded-xl px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 disabled:opacity-40"
+        style={{
+          background: "var(--accent)",
+        }}
         onMouseEnter={(e) => {
-          if (!disabled)
+          if (!disabled) {
             e.currentTarget.style.background = "var(--accent-hover)";
+            e.currentTarget.style.transform = "translateY(-1px)";
+          }
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.background = "var(--accent)";
+          e.currentTarget.style.transform = "translateY(0)";
         }}
       >
         Send

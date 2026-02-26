@@ -8,9 +8,9 @@ const labels: Record<string, string> = {
   disconnected: "Reconnecting",
 };
 
-const colors: Record<string, string> = {
+const dotColors: Record<string, string> = {
   connecting: "var(--muted)",
-  connected: "#22c55e",
+  connected: "var(--success)",
   disconnected: "var(--error)",
 };
 
@@ -18,10 +18,23 @@ export function ConnectionStatus() {
   const { status } = useSocket();
 
   return (
-    <div className="flex items-center gap-2 text-xs" style={{ color: "var(--muted)" }}>
+    <div
+      className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs animate-fade-in"
+      style={{
+        color: "var(--muted)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+      }}
+    >
       <span
-        className="inline-block h-2 w-2 rounded-full"
-        style={{ background: colors[status] }}
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{
+          background: dotColors[status],
+          boxShadow:
+            status === "connected"
+              ? "0 0 6px var(--success)"
+              : "none",
+        }}
       />
       {labels[status]}
     </div>

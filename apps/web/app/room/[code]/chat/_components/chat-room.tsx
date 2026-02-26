@@ -15,7 +15,7 @@ export function ChatRoom({ code }: { code: string }) {
 
   return (
     <RoomGuard code={code}>
-      <div className="flex h-svh flex-col">
+      <div className="flex h-svh flex-col" style={{ background: "var(--background)" }}>
         <RoomHeader />
         <PresenceBar />
         <MessageList messages={messages} />

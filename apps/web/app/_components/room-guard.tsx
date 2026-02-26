@@ -26,7 +26,7 @@ export function RoomGuard({
 
   if (!room || room.code !== code) {
     return (
-      <div className="flex min-h-svh items-center justify-center">
+      <div className="flex min-h-svh items-center justify-center animate-fade-in">
         <p className="text-sm" style={{ color: "var(--muted)" }}>
           Redirecting...
         </p>

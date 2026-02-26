@@ -9,9 +9,9 @@ import { VideoControls } from "./video-controls";
 
 const STATE_DOT: Record<string, string> = {
   idle: "var(--muted)",
-  "acquiring-media": "#f59e0b",
-  connecting: "#f59e0b",
-  connected: "#22c55e",
+  "acquiring-media": "var(--warning)",
+  connecting: "var(--warning)",
+  connected: "var(--success)",
   failed: "var(--error)",
 };
 
@@ -61,9 +61,9 @@ export function VideoRoom({ code }: { code: string }) {
     <RoomGuard code={code}>
       <div
         className="relative h-svh overflow-hidden"
-        style={{ background: "#000" }}
+        style={{ background: "oklch(10% 0.01 70)" }}
       >
-        {/* Remote video — fills viewport */}
+        {/* Remote video */}
         <video
           ref={remoteVideoRef}
           autoPlay
@@ -71,11 +71,14 @@ export function VideoRoom({ code }: { code: string }) {
           className="absolute inset-0 h-full w-full object-cover"
         />
 
-        {/* Remote nickname label */}
+        {/* Remote nickname */}
         {remoteStream && room?.participants.find((p) => p.sessionId !== undefined) && (
           <div
-            className="absolute bottom-24 left-4 z-10 rounded-md px-2 py-1"
-            style={{ background: "rgba(0,0,0,0.5)" }}
+            className="absolute bottom-24 left-4 z-10 rounded-lg px-3 py-1.5"
+            style={{
+              background: "rgba(0,0,0,0.45)",
+              backdropFilter: "blur(12px)",
+            }}
           >
             <span className="text-xs font-medium text-white">
               {room.participants.find((p) => p.online)?.nickname ?? "Peer"}
@@ -83,23 +86,24 @@ export function VideoRoom({ code }: { code: string }) {
           </div>
         )}
 
-        {/* Top overlay bar */}
+        {/* Top overlay */}
         <div
-          className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pb-12 pt-4"
+          className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 pb-12 pt-5 animate-fade-in"
           style={{
             background:
-              "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)",
+              "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)",
           }}
         >
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-white">
+            <span className="text-sm font-semibold text-white font-[family-name:var(--font-display)]">
               {room?.code ?? code}
             </span>
             <span
-              className="rounded-md px-2 py-0.5 text-xs font-medium"
+              className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
               style={{
-                background: "rgba(255,255,255,0.15)",
+                background: "rgba(255,255,255,0.12)",
                 color: "rgba(255,255,255,0.7)",
+                backdropFilter: "blur(8px)",
               }}
             >
               video
@@ -117,8 +121,14 @@ export function VideoRoom({ code }: { code: string }) {
 
           <div className="flex items-center gap-2">
             <span
-              className="inline-block h-2 w-2 rounded-full"
-              style={{ background: STATE_DOT[connectionState] }}
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{
+                background: STATE_DOT[connectionState],
+                boxShadow:
+                  connectionState === "connected"
+                    ? "0 0 6px var(--success)"
+                    : "none",
+              }}
             />
             <span
               className="text-xs"
@@ -129,16 +139,30 @@ export function VideoRoom({ code }: { code: string }) {
           </div>
         </div>
 
-        {/* Empty state — no remote stream yet */}
+        {/* Empty state */}
         {!remoteStream && connectionState !== "failed" && (
-          <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-2">
+          <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-3 animate-fade-in">
             <div
-              className="h-16 w-16 rounded-full"
-              style={{ background: "rgba(255,255,255,0.08)" }}
-            />
+              className="flex h-16 w-16 items-center justify-center rounded-full animate-breathe"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(255,255,255,0.3)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+            </div>
             <p
               className="text-sm font-medium"
-              style={{ color: "rgba(255,255,255,0.5)" }}
+              style={{ color: "rgba(255,255,255,0.4)" }}
             >
               {connectionState === "acquiring-media"
                 ? "Requesting camera & mic..."
@@ -149,8 +173,11 @@ export function VideoRoom({ code }: { code: string }) {
 
         {/* Error overlay */}
         {error && (
-          <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-2">
-            <p className="text-sm font-medium" style={{ color: "var(--error)" }}>
+          <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center gap-2 animate-fade-in">
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--error)" }}
+            >
               {error}
             </p>
           </div>
@@ -158,12 +185,13 @@ export function VideoRoom({ code }: { code: string }) {
 
         {/* Local video PiP */}
         <div
-          className="absolute bottom-24 right-4 z-20 overflow-hidden rounded-xl"
+          className="absolute bottom-24 right-4 z-20 overflow-hidden rounded-2xl transition-all duration-300"
           style={{
             width: 160,
             height: 120,
-            background: "#1a1a1a",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            background: "oklch(15% 0.01 70)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            border: "2px solid rgba(255,255,255,0.08)",
           }}
         >
           {isVideoOff ? (
@@ -173,8 +201,8 @@ export function VideoRoom({ code }: { code: string }) {
                 height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="rgba(255,255,255,0.4)"
-                strokeWidth="2"
+                stroke="rgba(255,255,255,0.3)"
+                strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
@@ -192,10 +220,13 @@ export function VideoRoom({ code }: { code: string }) {
               style={{ transform: "scaleX(-1)" }}
             />
           )}
-          {/* Local nickname label */}
+          {/* Local nickname */}
           <div
-            className="absolute bottom-1 left-1 rounded px-1.5 py-0.5"
-            style={{ background: "rgba(0,0,0,0.5)" }}
+            className="absolute bottom-1.5 left-1.5 rounded-md px-2 py-0.5"
+            style={{
+              background: "rgba(0,0,0,0.45)",
+              backdropFilter: "blur(8px)",
+            }}
           >
             <span className="text-[10px] font-medium text-white">
               {room?.nickname ?? "You"}
@@ -203,7 +234,7 @@ export function VideoRoom({ code }: { code: string }) {
           </div>
         </div>
 
-        {/* Bottom controls */}
+        {/* Controls */}
         <VideoControls
           isAudioMuted={isAudioMuted}
           isVideoOff={isVideoOff}

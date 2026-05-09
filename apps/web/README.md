@@ -1,28 +1,59 @@
-## Getting Started
+# Charlar Web
 
-First, run the development server:
+Next.js frontend for Charlar. It provides the room lobby, realtime chat UI, and browser WebRTC video room experience.
+
+## Local Development
+
+From the repository root:
 
 ```bash
-yarn dev
+pnpm install
+pnpm dev
 ```
 
-Open [http://localhost:3001](http://localhost:3001) with your browser to see the result.
+This starts the web app on [http://localhost:3000](http://localhost:3000) and the signaling server on `http://localhost:3001` through Turborepo.
 
-You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
+To run only the frontend:
 
-To create [API routes](https://nextjs.org/docs/app/building-your-application/routing/router-handlers) add an `api/` directory to the `app/` directory with a `route.ts` file. For individual endpoints, create a subfolder in the `api` directory, like `api/hello/route.ts` would map to [http://localhost:3001/api/hello](http://localhost:3001/api/hello).
+```bash
+pnpm --filter web dev
+```
 
-## Learn More
+The frontend expects the backend URL in `NEXT_PUBLIC_SERVER_URL`. For local development:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cp apps/web/.env.example apps/web/.env.local
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn/foundations/about-nextjs) - an interactive Next.js tutorial.
+```env
+NEXT_PUBLIC_SERVER_URL=http://localhost:3001
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+## Useful Commands
 
-## Deploy on Vercel
+Run these from the repository root:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_source=github.com&utm_medium=referral&utm_campaign=turborepo-readme) from the creators of Next.js.
+```bash
+pnpm --filter web check-types
+pnpm --filter web lint
+pnpm --filter web build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## App Structure
+
+- `app/page.tsx` - lobby with nickname, mode selection, create, and join controls.
+- `app/_components` - shared room shell, connection status, and providers.
+- `app/_lib` - Socket.IO client, room context, media helpers, and WebRTC peer manager.
+- `app/room/[code]/chat` - realtime chat route.
+- `app/room/[code]/video` - WebRTC video call route.
+
+## Deployment
+
+Deploy this app on Vercel with:
+
+- Root Directory: `apps/web`
+- Install Command: `cd ../.. && pnpm install --frozen-lockfile`
+- Build Command: `cd ../.. && pnpm turbo run build --filter=web`
+- Output Directory: `.next`
+
+Set `NEXT_PUBLIC_SERVER_URL` to the deployed Railway signaling server URL, then set the backend `CORS_ORIGIN` to the Vercel URL.

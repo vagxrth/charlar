@@ -21,6 +21,7 @@ export function useChat() {
   const { socket, sessionId } = useSocket();
   const { room } = useRoom();
   const roomCode = room?.code ?? "";
+  const nickname = room?.nickname;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [peerTyping, setPeerTyping] = useState(false);
@@ -129,7 +130,7 @@ export function useChat() {
       const optimistic: ChatMessage = {
         id: tempId,
         sessionId,
-        nickname: room?.nickname,
+        nickname,
         content,
         timestamp: Date.now(),
         pending: true,
@@ -168,7 +169,7 @@ export function useChat() {
         }
       );
     },
-    [socket, roomCode, sessionId]
+    [socket, roomCode, sessionId, nickname]
   );
 
   // ── Typing indicator emit ────────────────────────────

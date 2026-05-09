@@ -58,7 +58,7 @@ export function VideoRoom({ code }: { code: string }) {
   }
 
   return (
-    <RoomGuard code={code}>
+    <RoomGuard code={code} mode="video">
       <div
         className="relative h-svh overflow-hidden"
         style={{ background: "oklch(10% 0.01 70)" }}

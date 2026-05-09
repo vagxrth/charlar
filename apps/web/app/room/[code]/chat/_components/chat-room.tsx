@@ -14,7 +14,7 @@ export function ChatRoom({ code }: { code: string }) {
   const { messages, sendMessage, handleTyping, peerTyping } = useChat();
 
   return (
-    <RoomGuard code={code}>
+    <RoomGuard code={code} mode="chat">
       <div className="flex h-svh flex-col" style={{ background: "var(--background)" }}>
         <RoomHeader />
         <PresenceBar />

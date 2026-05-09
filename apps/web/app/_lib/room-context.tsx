@@ -9,9 +9,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { getSessionId as getSocketSessionId } from "./socket";
 import { useSocket } from "./socket-context";
 
-type Mode = "chat" | "video";
+export type Mode = "chat" | "video";
 
 interface Participant {
   sessionId: string;
@@ -31,16 +32,82 @@ interface RoomContextValue {
   room: RoomState | null;
   createRoom: (mode: Mode, nickname?: string) => Promise<string>;
   joinRoom: (code: string, mode: Mode, nickname?: string) => Promise<void>;
+  restoreRoom: (code: string, mode: Mode) => Promise<boolean>;
   leaveRoom: () => void;
 }
 
+const ROOM_STORAGE_KEY = "charlar.room";
+
 const RoomContext = createContext<RoomContextValue | null>(null);
 
+function isParticipant(value: unknown): value is Participant {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<Participant>;
+  return (
+    typeof candidate.sessionId === "string" &&
+    typeof candidate.online === "boolean" &&
+    typeof candidate.nickname === "string"
+  );
+}
+
+function readStoredRoom(): RoomState | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(ROOM_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<RoomState>;
+    if (
+      typeof parsed.code !== "string" ||
+      (parsed.mode !== "chat" && parsed.mode !== "video") ||
+      typeof parsed.nickname !== "string" ||
+      !Array.isArray(parsed.participants)
+    ) {
+      return null;
+    }
+
+    const participants = parsed.participants.filter(isParticipant);
+    return {
+      code: parsed.code,
+      mode: parsed.mode,
+      nickname: parsed.nickname,
+      participants,
+      participantCount:
+        typeof parsed.participantCount === "number"
+          ? parsed.participantCount
+          : participants.length,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredRoom(room: RoomState | null): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (room) {
+      window.localStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(room));
+    } else {
+      window.localStorage.removeItem(ROOM_STORAGE_KEY);
+    }
+  } catch {
+    // Storage may be unavailable in private browsing or locked-down contexts.
+  }
+}
+
 export function RoomProvider({ children }: { children: ReactNode }) {
-  const { socket } = useSocket();
+  const { socket, sessionId } = useSocket();
   const [room, setRoom] = useState<RoomState | null>(null);
   const roomRef = useRef(room);
   roomRef.current = room;
+
+  useEffect(() => {
+    if (room) {
+      writeStoredRoom(room);
+    }
+  }, [room]);
 
   const createRoom = useCallback(
     (mode: Mode, nickname?: string): Promise<string> =>
@@ -99,11 +166,59 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     [socket]
   );
 
+  const restoreRoom = useCallback(
+    (code: string, mode: Mode): Promise<boolean> =>
+      new Promise((resolve) => {
+        const storedRoom = readStoredRoom();
+
+        socket.emit(
+          "presence:request",
+          code,
+          (res: {
+            ok: boolean;
+            error?: string;
+            participantCount?: number;
+            participants?: Participant[];
+          }) => {
+            if (!res.ok) {
+              if (storedRoom?.code === code) {
+                writeStoredRoom(null);
+              }
+              setRoom((prev) => (prev?.code === code ? null : prev));
+              resolve(false);
+              return;
+            }
+
+            const participants = res.participants ?? [];
+            const currentSessionId = sessionId ?? getSocketSessionId();
+            const ownParticipant = participants.find(
+              (participant) => participant.sessionId === currentSessionId
+            );
+
+            setRoom({
+              code,
+              mode,
+              nickname:
+                ownParticipant?.nickname ??
+                storedRoom?.nickname ??
+                roomRef.current?.nickname ??
+                "Guest",
+              participants,
+              participantCount: res.participantCount ?? participants.length,
+            });
+            resolve(true);
+          }
+        );
+      }),
+    [socket, sessionId]
+  );
+
   const leaveRoom = useCallback(() => {
     const current = roomRef.current;
     if (!current) return;
 
     socket.emit("room:leave", current.code, () => {});
+    writeStoredRoom(null);
     setRoom(null);
   }, [socket]);
 
@@ -194,7 +309,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [socket]);
 
   return (
-    <RoomContext value={{ room, createRoom, joinRoom, leaveRoom }}>
+    <RoomContext value={{ room, createRoom, joinRoom, restoreRoom, leaveRoom }}>
       {children}
     </RoomContext>
   );

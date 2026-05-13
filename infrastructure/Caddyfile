@@ -1,0 +1,3 @@
+api.charlar.vagarth.in {
+    reverse_proxy signaling:3001
+}

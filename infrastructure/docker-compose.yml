@@ -1,0 +1,39 @@
+services:
+  signaling:
+    build:
+      context: ../
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    env_file: ./signaling.env
+    networks:
+      - charlar-net
+    expose:
+      - "3001"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - charlar-net
+    depends_on:
+      - signaling
+
+  coturn:
+    build: ./turn
+    restart: unless-stopped
+    env_file: ./turn/.env
+    network_mode: host
+
+networks:
+  charlar-net:
+
+volumes:
+  caddy_data:
+  caddy_config:

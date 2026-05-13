@@ -9,7 +9,7 @@ import { iceConfigService, roomService, sessionService } from "./services/index.
 
 const app: Express = express();
 
-// Trust first proxy (Railway / load balancer) so req.ip is the real client IP
+// Trust first proxy (reverse proxy / load balancer) so req.ip is the real client IP
 app.set("trust proxy", 1);
 
 app.use(helmet());

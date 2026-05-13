@@ -16,8 +16,7 @@ server.listen(config.port, () => {
 });
 
 // ── Graceful shutdown ────────────────────────────────────
-// Railway sends SIGTERM before killing the container.
-// Close the server, disconnect all sockets, then exit.
+// On SIGTERM/SIGINT close the server, disconnect all sockets, then exit.
 
 function shutdown(signal: string) {
   logger.info({ signal }, "shutdown signal received, draining connections");

@@ -56,4 +56,4 @@ Deploy this app on Vercel with:
 - Build Command: `cd ../.. && pnpm turbo run build --filter=web`
 - Output Directory: `.next`
 
-Set `NEXT_PUBLIC_SERVER_URL` to the deployed Railway signaling server URL, then set the backend `CORS_ORIGIN` to the Vercel URL.
+Set `NEXT_PUBLIC_SERVER_URL` to the deployed signaling server URL, then set the backend `CORS_ORIGIN` to the Vercel URL.

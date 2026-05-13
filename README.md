@@ -47,9 +47,9 @@ Peer-to-peer video and text chat application built with WebRTC, Socket.IO, and N
 
 | Platform | Service |
 |---|---|
-| Railway | Signaling server (Docker-based) |
+| Google Cloud (e2-micro VM) | Signaling server + TURN server + Caddy reverse proxy |
 | Vercel | Frontend hosting |
-| DigitalOcean Droplet | TURN server VPS |
+| Caddy | Automatic HTTPS via Let's Encrypt |
 
 ### Monorepo Tooling
 
@@ -71,7 +71,7 @@ Browser A                     Browser B
     └──────────┐     ┌────────────┘
                ▼     ▼
          ┌─────────────────┐
-         │  Signaling Server │  ← Railway
+         │  Signaling Server │  ← GCP VM (behind Caddy / HTTPS)
          │  (Express + S.IO) │
          └─────────────────┘
                │     │
@@ -84,7 +84,7 @@ Browser A ◄── WebRTC P2P ───► Browser B
     └──────────┐     ┌────────────┘
                ▼     ▼
          ┌─────────────────┐
-         │   TURN Server    │  ← DigitalOcean VPS
+         │   TURN Server    │  ← Same GCP VM (host networking)
          │   (Coturn)       │
          └─────────────────┘
 ```
@@ -160,15 +160,17 @@ charlar/
 │   └── eslint-config/          # Shared ESLint flat configs
 │
 ├── infrastructure/
+│   ├── docker-compose.yml      # Combined stack: signaling + TURN + Caddy
+│   ├── Caddyfile               # Reverse proxy + automatic HTTPS config
+│   ├── signaling.env.example   # Signaling server env template
 │   └── turn/                   # Coturn TURN server
 │       ├── Dockerfile
-│       ├── docker-compose.yml
+│       ├── docker-compose.yml  # Standalone TURN-only compose (optional)
 │       ├── turnserver.conf     # Config template with ${ENV_VAR} placeholders
 │       └── .env.example
 │
 ├── turbo.json
 ├── pnpm-workspace.yaml
-├── railway.toml
 └── package.json
 ```
 
@@ -242,68 +244,86 @@ TURN_SECRET=your-secret-here
 
 ## Production Deployment
 
-### 1. Signaling Server (Railway)
+The backend (signaling + TURN + reverse proxy) runs on a single small VM. The frontend runs on Vercel.
 
-The repo includes a `railway.toml` at the root that configures the Docker-based deployment automatically.
+### 1. Backend (Google Cloud e2-micro)
 
-1. Create a new project on [railway.app](https://railway.app) and deploy from GitHub
-2. Railway detects `railway.toml` and uses `apps/server/Dockerfile` — **do not change the root directory**
-3. Set environment variables on the service:
+GCP's Always Free tier covers one `e2-micro` instance in `us-west1`, `us-central1`, or `us-east1` indefinitely.
 
-   ```
-   CORS_ORIGIN=https://your-frontend-domain.com
-   STUN_URLS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
-   TURN_URLS=turn:your-vps-ip:3478
-   TURN_SECRET=your-shared-secret
-   ```
+**Provision the VM:**
 
-   **Do not set `PORT`** — Railway injects it automatically.
+1. Create a project at [console.cloud.google.com](https://console.cloud.google.com), set up a billing budget alert ($1/mo with email notifications) as a safety net
+2. Compute Engine → **Create Instance**:
+   - Machine type: `e2-micro` (free tier)
+   - Region: `us-central1` (any zone)
+   - Boot disk: Ubuntu 24.04 LTS, 30 GB **Standard persistent disk**
+   - Firewall: allow HTTP + HTTPS
+3. VPC network → **Firewall** → create rule `charlar-turn`:
+   - Ingress, allow from `0.0.0.0/0`
+   - TCP: `3478`
+   - UDP: `3478,49152-65535`
 
-4. Verify: `curl https://your-railway-url.up.railway.app/health`
+**Point DNS at the VM:**
 
-### 2. TURN Server (VPS)
+Create an A record `api.<your-domain>` pointing to the VM's external IP. Verify with `dig +short api.<your-domain>`.
 
-Use any VPS provider (DigitalOcean, Hetzner, AWS Lightsail). Minimum: 1 CPU, 1 GB RAM, Ubuntu 24.04.
+**Install Docker and deploy:**
 
-**Open firewall ports:**
-
-| Port | Protocol | Purpose |
-|---|---|---|
-| 22 | TCP | SSH |
-| 3478 | TCP + UDP | TURN |
-| 49152-65535 | UDP | Relay range |
-
-**Setup:**
+SSH into the VM (browser SSH from the console works):
 
 ```bash
 # Install Docker
-curl -fsSL https://get.docker.com | sh
+sudo apt update && sudo apt install -y ca-certificates curl gnupg
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+# log out + back in for group to apply
 
-# Clone and configure
+# Clone repo
 git clone https://github.com/vagxrth/charlar.git
-cd charlar/infrastructure/turn
-cp .env.example .env
+cd charlar/infrastructure
+
+# Generate values
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+TURN_SECRET=$(openssl rand -hex 32)
+PUBLIC_IP=$(curl -s ifconfig.me)
+DOMAIN=api.your-domain.com
+
+# Create env files
+cp signaling.env.example signaling.env
+sed -i "s|^TURN_SECRET=.*|TURN_SECRET=$TURN_SECRET|" signaling.env
+sed -i "s|charlar.vagarth.in|your-frontend-domain.com|g" signaling.env
+sed -i "s|api.charlar.vagarth.in|$DOMAIN|g" signaling.env
+
+cp turn/.env.example turn/.env
+sed -i "s|^TURN_SECRET=.*|TURN_SECRET=$TURN_SECRET|" turn/.env
+sed -i "s|^TURN_REALM=.*|TURN_REALM=$DOMAIN|" turn/.env
+sed -i "s|^TURN_EXTERNAL_IP=.*|TURN_EXTERNAL_IP=$PUBLIC_IP|" turn/.env
+sed -i "s|^TURN_LISTENING_IP=.*|TURN_LISTENING_IP=$PRIVATE_IP|" turn/.env
+
+# Update Caddyfile to use your domain
+sed -i "s|api.charlar.vagarth.in|$DOMAIN|" Caddyfile
+
+# Start the stack
+sudo docker compose up -d --build
+sudo docker compose logs --tail=50
 ```
 
-Edit `.env`:
+The combined `docker-compose.yml` runs three services:
+- **signaling** — Express + Socket.IO server (internal port 3001)
+- **caddy** — reverse proxy on 80/443 with automatic Let's Encrypt TLS
+- **coturn** — TURN server with host networking (for UDP relay performance)
 
-```env
-TURN_SECRET=<same secret as Railway>
-TURN_REALM=your-vps-ip-or-domain
-TURN_EXTERNAL_IP=<your VPS public IP>
-TURN_LISTENING_IP=0.0.0.0
-TURN_MIN_PORT=49152
-TURN_MAX_PORT=65535
-```
-
-Generate a strong secret: `openssl rand -hex 32`
+Verify:
 
 ```bash
-docker compose up -d
-docker compose logs  # verify coturn starts without errors
+curl https://api.<your-domain>/health
+# {"status":"ok","uptime":...,"rooms":0,"sessions":0}
+
+curl https://api.<your-domain>/api/ice-config
+# {"iceServers":[{"urls":["stun:..."]},{"urls":["turn:..."],"username":"...","credential":"..."}]}
 ```
 
-### 3. Frontend (Vercel)
+### 2. Frontend (Vercel)
 
 1. Import the repo on [vercel.com](https://vercel.com)
 2. Configure build settings:
@@ -318,21 +338,10 @@ docker compose logs  # verify coturn starts without errors
 3. Set environment variable:
 
    ```
-   NEXT_PUBLIC_SERVER_URL=https://your-railway-url.up.railway.app
+   NEXT_PUBLIC_SERVER_URL=https://api.<your-domain>
    ```
 
-4. Deploy and note the Vercel URL
-5. **Update Railway** `CORS_ORIGIN` to the Vercel URL (replace the `*` placeholder)
-
-### Verify the full stack
-
-```bash
-# Health check
-curl https://your-railway-url.up.railway.app/health
-
-# ICE config (should show both STUN and TURN entries)
-curl https://your-railway-url.up.railway.app/api/ice-config
-```
+4. Deploy. `TURN_SECRET` is **never set on Vercel** — it stays server-side. The frontend fetches ephemeral credentials from `/api/ice-config` at runtime.
 
 ## Socket Events
 

@@ -15,7 +15,13 @@ export function ChatRoom({ code }: { code: string }) {
 
   return (
     <RoomGuard code={code} mode="chat">
-      <div className="flex h-svh flex-col" style={{ background: "var(--background)" }}>
+      <div
+        className="relative flex h-svh flex-col"
+        style={{ background: "var(--background)" }}
+      >
+        {/* Faint background mesh for atmosphere */}
+        <div className="bg-mesh" aria-hidden="true" style={{ opacity: 0.5 }} />
+
         <RoomHeader />
         <PresenceBar />
         <MessageList messages={messages} />

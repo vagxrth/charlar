@@ -164,4 +164,42 @@ export const signalingHandler: SocketHandler = (io, socket) => {
       callback({ ok: true });
     }
   );
+
+  // Broadcast a participant's local mute/video-off state to everyone else
+  // in the room. Used to draw mic/camera-off badges on the remote tile.
+  socket.on(
+    "media:state",
+    (
+      payload: { roomCode: unknown; audioMuted: unknown; videoOff: unknown },
+      rawCallback: unknown
+    ) => {
+      const callback = ensureCallback(rawCallback);
+
+      if (!RoomService.isValidCode(payload?.roomCode)) {
+        callback({ ok: false, error: "Invalid room code" });
+        return;
+      }
+      if (
+        typeof payload.audioMuted !== "boolean" ||
+        typeof payload.videoOff !== "boolean"
+      ) {
+        callback({ ok: false, error: "Invalid media state" });
+        return;
+      }
+
+      const sessionId = getSessionId(socket);
+      if (!roomService.isParticipant(payload.roomCode, sessionId)) {
+        callback({ ok: false, error: "Not a participant of this room" });
+        return;
+      }
+
+      socket.to(payload.roomCode).emit("media:state", {
+        sessionId,
+        audioMuted: payload.audioMuted,
+        videoOff: payload.videoOff,
+      });
+
+      callback({ ok: true });
+    }
+  );
 };

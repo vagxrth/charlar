@@ -4,12 +4,12 @@ import { useSocket } from "../_lib/socket-context";
 
 const labels: Record<string, string> = {
   connecting: "Connecting",
-  connected: "Connected",
+  connected: "Online",
   disconnected: "Reconnecting",
 };
 
 const dotColors: Record<string, string> = {
-  connecting: "var(--muted)",
+  connecting: "var(--warning)",
   connected: "var(--success)",
   disconnected: "var(--error)",
 };
@@ -19,24 +19,24 @@ export function ConnectionStatus() {
 
   return (
     <div
-      className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs animate-fade-in"
+      className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] animate-fade-in label-eyebrow"
       style={{
-        color: "var(--muted)",
-        background: "var(--surface)",
+        background: "color-mix(in oklch, var(--surface) 70%, transparent)",
         border: "1px solid var(--border)",
+        backdropFilter: "blur(12px)",
       }}
     >
-      <span
-        className="inline-block h-1.5 w-1.5 rounded-full"
-        style={{
-          background: dotColors[status],
-          boxShadow:
-            status === "connected"
-              ? "0 0 6px var(--success)"
-              : "none",
-        }}
-      />
-      {labels[status]}
+      <span className="relative inline-flex h-1.5 w-1.5">
+        <span
+          className="absolute inset-0 rounded-full animate-pulse-soft"
+          style={{
+            background: dotColors[status],
+            boxShadow:
+              status === "connected" ? `0 0 8px ${dotColors[status]}` : "none",
+          }}
+        />
+      </span>
+      <span style={{ color: "var(--foreground-secondary)" }}>{labels[status]}</span>
     </div>
   );
 }

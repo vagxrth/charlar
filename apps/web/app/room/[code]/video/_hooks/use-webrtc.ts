@@ -34,6 +34,16 @@ export function useWebRTC() {
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
+  /**
+   * Whether the *remote* participant has muted their mic or stopped
+   * their camera. We learn this from a small "media:state" relay over
+   * the signaling socket — `track.enabled = false` does not actually
+   * trigger remote-side mute events in WebRTC (the source still
+   * streams silence/black), so we have to tell each other explicitly.
+   */
+  const [remoteAudioMuted, setRemoteAudioMuted] = useState(false);
+  const [remoteVideoOff, setRemoteVideoOff] = useState(false);
+
   const peerRef = useRef<PeerManager | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const iceServersRef = useRef<RTCIceServer[] | null>(null);
@@ -480,21 +490,79 @@ export function useWebRTC() {
     };
   }, [socket, createPeer, clearDisconnectedTimer]);
 
+  /** Broadcast our current mute/camera state to other participants. */
+  const broadcastMediaState = useCallback(
+    (audioMuted: boolean, videoOff: boolean) => {
+      const roomCode = roomCodeRef.current;
+      if (!roomCode) return;
+      socket.emit(
+        "media:state",
+        { roomCode, audioMuted, videoOff },
+        () => {}
+      );
+    },
+    [socket]
+  );
+
   const toggleAudio = useCallback(() => {
     const track = localStreamRef.current?.getAudioTracks()[0];
     if (track) {
       track.enabled = !track.enabled;
-      setIsAudioMuted(!track.enabled);
+      const muted = !track.enabled;
+      setIsAudioMuted(muted);
+      broadcastMediaState(muted, isVideoOff);
     }
-  }, []);
+  }, [broadcastMediaState, isVideoOff]);
 
   const toggleVideo = useCallback(() => {
     const track = localStreamRef.current?.getVideoTracks()[0];
     if (track) {
       track.enabled = !track.enabled;
-      setIsVideoOff(!track.enabled);
+      const off = !track.enabled;
+      setIsVideoOff(off);
+      broadcastMediaState(isAudioMuted, off);
     }
-  }, []);
+  }, [broadcastMediaState, isAudioMuted]);
+
+  // ── Remote media-state listener ───────────────────────
+  useEffect(() => {
+    function onMediaState(data: {
+      sessionId: string;
+      audioMuted: boolean;
+      videoOff: boolean;
+    }) {
+      // Only honor updates from our current peer
+      if (targetSessionIdRef.current && data.sessionId !== targetSessionIdRef.current) {
+        return;
+      }
+      setRemoteAudioMuted(Boolean(data.audioMuted));
+      setRemoteVideoOff(Boolean(data.videoOff));
+    }
+
+    function onPeerLeft() {
+      setRemoteAudioMuted(false);
+      setRemoteVideoOff(false);
+    }
+
+    socket.on("media:state", onMediaState);
+    socket.on("room:peer-left", onPeerLeft);
+
+    return () => {
+      socket.off("media:state", onMediaState);
+      socket.off("room:peer-left", onPeerLeft);
+    };
+  }, [socket]);
+
+  // When the peer connection establishes, push our current state so
+  // the freshly-connected peer can render correct badges immediately.
+  useEffect(() => {
+    if (connectionState === "connected") {
+      broadcastMediaState(isAudioMuted, isVideoOff);
+    }
+    // We deliberately don't depend on isAudioMuted/isVideoOff —
+    // the toggle functions already broadcast their own changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionState, broadcastMediaState]);
 
   return {
     localStream,
@@ -503,6 +571,8 @@ export function useWebRTC() {
     error,
     isAudioMuted,
     isVideoOff,
+    remoteAudioMuted,
+    remoteVideoOff,
     toggleAudio,
     toggleVideo,
   };

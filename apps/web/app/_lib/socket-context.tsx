@@ -26,15 +26,27 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>("connecting");
   const [sessionId, setSessionId] = useState<string | null>(null);
 
+  // Create the singleton socket synchronously on the client so it is available
+  // to consumers from the very first render. On the server this stays null and we
+  // still render children below — the page must never be blank while waiting on a
+  // connection, and effects/handlers that touch the socket only run on the client.
+  if (socketRef.current === null && typeof window !== "undefined") {
+    socketRef.current = getSocket();
+  }
+
   useEffect(() => {
-    const socket = getSocket();
-    socketRef.current = socket;
+    const socket = socketRef.current;
+    if (!socket) return;
 
     function onConnect() {
       setStatus("connected");
     }
 
     function onDisconnect() {
+      setStatus("disconnected");
+    }
+
+    function onConnectError() {
       setStatus("disconnected");
     }
 
@@ -50,20 +62,22 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
     socket.on("session:created", onSessionCreated);
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
       socket.off("session:created", onSessionCreated);
     };
   }, []);
 
-  // Don't render children until we have a socket reference
-  if (!socketRef.current) return null;
-
+  // Always render children. During SSR the socket is null (never dereferenced
+  // server-side); on the client it is set synchronously above, so consumers that
+  // read `socket` inside post-mount effects/handlers always get a live instance.
   return (
-    <SocketContext value={{ socket: socketRef.current, status, sessionId }}>
+    <SocketContext value={{ socket: socketRef.current as Socket, status, sessionId }}>
       {children}
     </SocketContext>
   );

@@ -313,9 +313,27 @@ export function VideoRoom({ code }: { code: string }) {
                 "0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
             }}
           >
-            {isVideoOff ? (
+            {/* The local <video> stays mounted across camera toggles so it
+                keeps its srcObject — toggling video only flips track.enabled,
+                it never recreates localStream, so the srcObject effect won't
+                re-run to re-attach a freshly-mounted element. We layer the
+                camera-off state on top instead (mirrors the remote video). */}
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="h-full w-full object-cover"
+              style={{
+                transform: "scaleX(-1)",
+                opacity: isVideoOff ? 0 : 1,
+                transition: "opacity .3s ease",
+              }}
+            />
+
+            {isVideoOff && (
               <div
-                className="flex h-full w-full flex-col items-center justify-center gap-1"
+                className="absolute inset-0 flex flex-col items-center justify-center gap-1 animate-fade-in"
                 style={{
                   background:
                     "linear-gradient(135deg, oklch(22% 0.02 75) 0%, oklch(15% 0.01 70) 100%)",
@@ -335,15 +353,6 @@ export function VideoRoom({ code }: { code: string }) {
                   camera off
                 </span>
               </div>
-            ) : (
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full object-cover"
-                style={{ transform: "scaleX(-1)" }}
-              />
             )}
 
             {/* Local nickname + mute */}

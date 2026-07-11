@@ -3,9 +3,9 @@
 import { useSocket } from "../_lib/socket-context";
 
 const labels: Record<string, string> = {
-  connecting: "Connecting",
-  connected: "Online",
-  disconnected: "Reconnecting",
+  connecting: "connecting",
+  connected: "online",
+  disconnected: "reconnecting",
 };
 
 const dotColors: Record<string, string> = {
@@ -14,29 +14,35 @@ const dotColors: Record<string, string> = {
   disconnected: "var(--error)",
 };
 
+/**
+ * Connection heartbeat — lives in the form card's status bar, above the rule.
+ * Ambient when healthy; takes the state color when the connection degrades
+ * (the form's CTA escalates to "Connecting…" alongside it).
+ */
 export function ConnectionStatus() {
   const { status } = useSocket();
+  const ok = status === "connected";
 
   return (
-    <div
-      className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] animate-fade-in label-eyebrow"
-      style={{
-        background: "color-mix(in oklch, var(--surface) 70%, transparent)",
-        border: "1px solid var(--border)",
-        backdropFilter: "blur(12px)",
-      }}
-    >
+    <div className="flex items-center gap-2" aria-live="polite">
       <span className="relative inline-flex h-1.5 w-1.5">
         <span
           className="absolute inset-0 rounded-full animate-pulse-soft"
           style={{
             background: dotColors[status],
-            boxShadow:
-              status === "connected" ? `0 0 8px ${dotColors[status]}` : "none",
+            boxShadow: ok ? `0 0 8px ${dotColors[status]}` : "none",
           }}
         />
       </span>
-      <span style={{ color: "var(--foreground-secondary)" }}>{labels[status]}</span>
+      <span
+        className="label-eyebrow"
+        style={{
+          color: ok ? "var(--muted)" : dotColors[status],
+          opacity: ok ? 0.75 : 1,
+        }}
+      >
+        {labels[status]}
+      </span>
     </div>
   );
 }

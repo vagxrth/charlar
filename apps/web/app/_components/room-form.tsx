@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useRoom } from "../_lib/room-context";
 import { useSocket } from "../_lib/socket-context";
+import { ConnectionStatus } from "./connection-status";
 
 type Mode = "chat" | "video";
 
@@ -68,6 +69,14 @@ export function RoomForm() {
       className="surface-card flex w-full flex-col gap-7 p-7 animate-fade-in-up"
       style={{ animationDelay: ".4s" }}
     >
+      {/* Status header */}
+      <div className="-mt-1 -mb-2 flex flex-col gap-3">
+        <div className="flex justify-end">
+          <ConnectionStatus />
+        </div>
+        <div className="h-px" style={{ background: "var(--border)" }} />
+      </div>
+
       {/* Nickname */}
       <div className="flex flex-col gap-2">
         <label htmlFor="nickname" className="label-eyebrow">
@@ -140,7 +149,7 @@ export function RoomForm() {
         disabled={disabled}
         className="btn-primary w-full"
       >
-        {loading ? (
+        {loading || status !== "connected" ? (
           <>
             <span className="inline-block h-2 w-2 rounded-full animate-pulse-soft" style={{ background: "currentColor" }} />
             Connecting…

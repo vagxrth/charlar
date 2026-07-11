@@ -1,6 +1,6 @@
 import "@repo/ui/styles.css";
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./_components/providers";
 
@@ -26,6 +26,13 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "charlar — connect · chat · call",
   description: "Effortless rooms for two. Chat or video, no signup.",
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0704" },
+    { media: "(prefers-color-scheme: light)", color: "#fbf8f2" },
+  ],
 };
 
 export default function RootLayout({

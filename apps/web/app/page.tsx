@@ -1,4 +1,4 @@
-import { ConnectionStatus } from "./_components/connection-status";
+import { CharlarMark } from "./_components/logo";
 import { RoomForm } from "./_components/room-form";
 
 export default function Page() {
@@ -7,21 +7,24 @@ export default function Page() {
       <div className="bg-mesh" aria-hidden="true" />
       <div className="bg-grain" aria-hidden="true" />
 
-      <div className="flex w-full max-w-md flex-col items-center gap-10 animate-fade-in">
+      <div className="flex w-full max-w-md flex-col items-center gap-6 animate-fade-in">
         {/* Header */}
         <header className="flex flex-col items-center gap-5 text-center">
-          <h1
-            className="text-display text-6xl leading-none sm:text-7xl animate-shimmer-in"
-            style={{
-              color: "var(--foreground)",
-              fontWeight: 300,
-            }}
-          >
-            charlar
-          </h1>
-
-          <div style={{ animationDelay: ".3s" }} className="animate-fade-in">
-            <ConnectionStatus />
+          <div className="flex items-center gap-4 animate-shimmer-in">
+            <CharlarMark
+              size={50}
+              decorative
+              className="translate-y-[3px]"
+            />
+            <h1
+              className="text-display text-6xl leading-none sm:text-7xl"
+              style={{
+                color: "var(--foreground)",
+                fontWeight: 300,
+              }}
+            >
+              charlar
+            </h1>
           </div>
         </header>
 

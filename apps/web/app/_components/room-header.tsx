@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useRoom } from "../_lib/room-context";
+import { CharlarMark } from "./logo";
 
 const MODE_ICON: Record<string, React.ReactNode> = {
   chat: (
@@ -84,6 +85,8 @@ export function RoomHeader({ overlay = false }: RoomHeaderProps) {
       }}
     >
       <div className="flex flex-1 items-center gap-3 overflow-hidden">
+        <CharlarMark size={18} decorative className="shrink-0" />
+
         {/* Room code + copy */}
         <button
           type="button"

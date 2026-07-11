@@ -28,10 +28,7 @@ export function ConnectionStatus() {
       <span className="relative inline-flex h-1.5 w-1.5">
         <span
           className="absolute inset-0 rounded-full animate-pulse-soft"
-          style={{
-            background: dotColors[status],
-            boxShadow: ok ? `0 0 8px ${dotColors[status]}` : "none",
-          }}
+          style={{ background: dotColors[status] }}
         />
       </span>
       <span

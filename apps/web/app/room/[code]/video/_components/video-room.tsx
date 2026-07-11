@@ -179,13 +179,7 @@ export function VideoRoom({ code }: { code: string }) {
           >
             <span
               className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{
-                background: STATE_DOT[connectionState],
-                boxShadow:
-                  connectionState === "connected"
-                    ? `0 0 8px ${STATE_DOT[connectionState]}`
-                    : "none",
-              }}
+              style={{ background: STATE_DOT[connectionState] }}
             />
             <span
               className="label-eyebrow"

@@ -22,7 +22,7 @@ function Avatar({ name, online }: { name: string; online: boolean }) {
         className="absolute -bottom-0 -right-0 inline-block h-2 w-2 rounded-full"
         style={{
           background: online ? "var(--success)" : "var(--muted)",
-          boxShadow: online ? "0 0 6px var(--success), 0 0 0 2px var(--surface)" : "0 0 0 2px var(--surface)",
+          boxShadow: "0 0 0 2px var(--surface)",
         }}
       />
     </span>

@@ -89,31 +89,17 @@ function CtrlButton({
       style={{
         background: bg,
         border: "1px solid rgba(255,255,255,0.08)",
-        boxShadow:
-          variant === "danger"
-            ? "0 4px 16px rgba(220,60,60,0.35)"
-            : active
-              ? "0 4px 16px rgba(220,60,60,0.25)"
-              : "0 2px 8px rgba(0,0,0,0.25)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-2px) scale(1.04)";
         if (variant !== "danger" && !active) {
           e.currentTarget.style.background = "rgba(255,255,255,0.18)";
         }
-        if (variant === "danger") {
-          e.currentTarget.style.boxShadow = "0 6px 24px rgba(220,60,60,0.55)";
-        }
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "translateY(0) scale(1)";
         e.currentTarget.style.background = bg;
-        e.currentTarget.style.boxShadow =
-          variant === "danger"
-            ? "0 4px 16px rgba(220,60,60,0.35)"
-            : active
-              ? "0 4px 16px rgba(220,60,60,0.25)"
-              : "0 2px 8px rgba(0,0,0,0.25)";
       }}
     >
       {children}

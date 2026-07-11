@@ -51,7 +51,7 @@ const MessageBubble = memo(function MessageBubble({
           border: isOwn ? "none" : "1px solid var(--border)",
           opacity: message.pending ? 0.6 : 1,
           boxShadow: isOwn
-            ? "0 4px 16px var(--accent-glow)"
+            ? "0 1px 2px rgba(0,0,0,0.08)"
             : "0 1px 2px rgba(0,0,0,0.03)",
           borderRadius: isOwn
             ? `18px 18px ${tail ? "6px" : "18px"} 18px`
@@ -132,7 +132,6 @@ export function MessageList({ messages }: { messages: ChatMessage[] }) {
           className="flex h-14 w-14 items-center justify-center rounded-full animate-float-gentle"
           style={{
             background: "var(--accent-soft)",
-            boxShadow: "0 12px 32px var(--accent-glow)",
           }}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

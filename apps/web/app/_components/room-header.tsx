@@ -164,17 +164,8 @@ export function RoomHeader({ overlay = false }: RoomHeaderProps) {
         )}
       </div>
 
-      {/* Right side: copied toast + leave */}
+      {/* Right side: leave */}
       <div className="flex items-center gap-2">
-        {copied && (
-          <span
-            className="animate-fade-in label-eyebrow"
-            style={{ color: overlay ? "rgba(255,255,255,0.7)" : "var(--success)" }}
-          >
-            copied
-          </span>
-        )}
-
         <button
           type="button"
           onClick={handleLeave}

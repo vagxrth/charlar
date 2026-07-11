@@ -213,12 +213,18 @@ body {
 }
 
 .input-soft:focus,
-.input-soft:focus-visible {
+.input-soft:focus-visible,
+.input-soft:focus-within {
   outline: none;
   border-color: var(--accent);
   box-shadow:
     0 0 0 4px var(--accent-soft),
     inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+/* Inside a pill the pill itself draws the focus ring — never the child */
+.input-soft :focus-visible {
+  outline: none;
 }
 
 /* Primary CTA — gradient fill */

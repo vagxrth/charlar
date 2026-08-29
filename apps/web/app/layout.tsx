@@ -24,8 +24,29 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://charlar.vagarth.in"),
   title: "charlar — connect · chat · call",
   description: "Effortless rooms for two. Chat or video, no signup.",
+  openGraph: {
+    title: "charlar — connect · chat · call",
+    description: "Effortless rooms for two. Chat or video, no signup.",
+    siteName: "charlar",
+    type: "website",
+    images: [
+      {
+        url: "/images/og-charlar-lines.png",
+        width: 1200,
+        height: 630,
+        alt: "Charlar — The Room Between",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "charlar — connect · chat · call",
+    description: "Effortless rooms for two. Chat or video, no signup.",
+    images: ["/images/og-charlar-lines.png"],
+  },
 };
 
 export const viewport: Viewport = {

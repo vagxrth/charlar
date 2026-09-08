@@ -7,7 +7,9 @@ TURN relay for charlar — used when peer-to-peer WebRTC connections cannot be e
 ```bash
 cd infrastructure/turn
 cp .env.example .env
-# Fill in TURN_SECRET (must match apps/server), TURN_EXTERNAL_IP, etc.
+# Fill in TURN_SECRET (must match apps/server) and TURN_REALM.
+# On a GCE VM leave TURN_EXTERNAL_IP / TURN_LISTENING_IP blank — the entrypoint
+# reads them from the metadata server. Elsewhere, set them explicitly.
 docker compose up
 ```
 
@@ -32,7 +34,7 @@ The backend's `IceConfigService` generates ephemeral HMAC-SHA1 credentials that 
 
 - Each relayed video call uses ~1.5–4 Mbps bidirectional (720p)
 - The 16k relay port range (49152–65535) supports ~8k concurrent sessions
-- `total-quota` in `turnserver.conf` limits aggregate bandwidth — size to your server's NIC capacity
+- `total-quota` in `turnserver.conf` caps concurrent relay allocations (not bandwidth); `bps-capacity` is the bandwidth control and is currently unlimited
 - TURN is only used when direct P2P fails (~15–20% of connections); most traffic is peer-to-peer
 - Monitor with coturn's Prometheus exporter or log-based metrics
 - Watch bandwidth billing on cloud providers (AWS, GCP charge per-GB egress)
@@ -43,5 +45,7 @@ The backend's `IceConfigService` generates ephemeral HMAC-SHA1 credentials that 
 |---|---|
 | `turnserver.conf` | Coturn config template with `${ENV_VAR}` placeholders |
 | `.env.example` | All required environment variables with documentation |
-| `Dockerfile` | Container image — substitutes env vars at runtime via `envsubst` |
+| `Dockerfile` | Container image — adds `envsubst` and `curl`, installs the entrypoint |
+| `docker-entrypoint.sh` | Resolves the advertised IPs (metadata fallback), renders the config, execs `turnserver` |
 | `docker-compose.yml` | Development compose file with host networking |
+| `../verify-turn.mjs` | End-to-end relay check — asserts the advertised relay address is really this host |

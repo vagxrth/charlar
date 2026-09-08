@@ -163,8 +163,10 @@ charlar/
 │   ├── docker-compose.yml      # Combined stack: signaling + TURN + Caddy
 │   ├── Caddyfile               # Reverse proxy + automatic HTTPS config
 │   ├── signaling.env.example   # Signaling server env template
+│   ├── verify-turn.mjs         # End-to-end TURN relay check (exit 0/1)
 │   └── turn/                   # Coturn TURN server
 │       ├── Dockerfile
+│       ├── docker-entrypoint.sh # Resolves advertised IPs, then execs turnserver
 │       ├── docker-compose.yml  # Standalone TURN-only compose (optional)
 │       ├── turnserver.conf     # Config template with ${ENV_VAR} placeholders
 │       └── .env.example
@@ -231,7 +233,8 @@ Only needed for testing TURN relay — most local connections work with STUN alo
 ```bash
 cd infrastructure/turn
 cp .env.example .env
-# Edit .env: set TURN_SECRET, TURN_EXTERNAL_IP=127.0.0.1, TURN_LISTENING_IP=0.0.0.0
+# Off GCE there is no metadata server, so set these explicitly:
+# TURN_SECRET, TURN_EXTERNAL_IP=127.0.0.1, TURN_LISTENING_IP=0.0.0.0
 docker compose up
 ```
 
@@ -283,9 +286,7 @@ git clone https://github.com/vagxrth/charlar.git
 cd charlar/infrastructure
 
 # Generate values
-PRIVATE_IP=$(hostname -I | awk '{print $1}')
 TURN_SECRET=$(openssl rand -hex 32)
-PUBLIC_IP=$(curl -s ifconfig.me)
 DOMAIN=api.your-domain.com
 
 # Create env files
@@ -297,8 +298,9 @@ sed -i "s|api.charlar.vagarth.in|$DOMAIN|g" signaling.env
 cp turn/.env.example turn/.env
 sed -i "s|^TURN_SECRET=.*|TURN_SECRET=$TURN_SECRET|" turn/.env
 sed -i "s|^TURN_REALM=.*|TURN_REALM=$DOMAIN|" turn/.env
-sed -i "s|^TURN_EXTERNAL_IP=.*|TURN_EXTERNAL_IP=$PUBLIC_IP|" turn/.env
-sed -i "s|^TURN_LISTENING_IP=.*|TURN_LISTENING_IP=$PRIVATE_IP|" turn/.env
+# TURN_EXTERNAL_IP / TURN_LISTENING_IP stay blank — the coturn entrypoint reads
+# them from the GCE metadata server on every start, so they cannot go stale when
+# the VM restarts on a different ephemeral IP.
 
 # Update Caddyfile to use your domain
 sed -i "s|api.charlar.vagarth.in|$DOMAIN|" Caddyfile
@@ -321,6 +323,15 @@ curl https://api.<your-domain>/health
 
 curl https://api.<your-domain>/api/ice-config
 # {"iceServers":[{"urls":["stun:..."]},{"urls":["turn:..."],"username":"...","credential":"..."}]}
+```
+
+Then check the relay itself — a misconfigured TURN server fails silently, since
+chat and direct P2P calls keep working while only relayed calls break:
+
+```bash
+node infrastructure/verify-turn.mjs api.<your-domain>
+# ✔ Allocate succeeded — HMAC credentials accepted by coturn
+# ✔ relay address 34.121.38.38:56331 matches the host
 ```
 
 ### 2. Frontend (Vercel)

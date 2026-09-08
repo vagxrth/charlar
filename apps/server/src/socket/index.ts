@@ -29,6 +29,27 @@ const MAX_CONNECTIONS_PER_WINDOW = 10;
 const CONNECTION_WINDOW_MS = 60_000;
 const connectionTimestamps = new Map<string, number[]>();
 
+/**
+ * The client's address as seen through the reverse proxy.
+ *
+ * `handshake.address` is whoever opened the TCP connection, which behind Caddy
+ * is the proxy itself — an identical value for every user, which would turn the
+ * per-IP limit below into a global one (ten connections a minute for the whole
+ * service, with Socket.IO's own retries consuming the budget). Express resolves
+ * this via `app.set("trust proxy", 1)`, but that is an Express setting and does
+ * not reach Socket.IO, so the forwarded header has to be read here as well.
+ *
+ * Trusting a client-supplied header is only safe because Caddy overwrites it
+ * with the real peer address. Do not expose this server to the internet without
+ * the proxy in front, or the limit becomes trivially forgeable.
+ */
+function clientIp(socket: Socket): string {
+  const forwarded = socket.handshake.headers["x-forwarded-for"];
+  const chain = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  // Left-most entry is the original client; the rest are intermediate proxies.
+  return chain?.split(",")[0]?.trim() || socket.handshake.address;
+}
+
 function isConnectionAllowed(ip: string): boolean {
   const now = Date.now();
   const cutoff = now - CONNECTION_WINDOW_MS;
@@ -125,7 +146,7 @@ export function initSocket(httpServer: HttpServer): Server {
 
   // Reject connections that exceed the per-IP rate limit
   io.use((socket, next) => {
-    const ip = socket.handshake.address;
+    const ip = clientIp(socket);
     if (!isConnectionAllowed(ip)) {
       logger.warn({ ip }, "connection rate limited");
       next(new Error("Too many connections"));

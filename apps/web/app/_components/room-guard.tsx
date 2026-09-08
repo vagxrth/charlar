@@ -55,7 +55,11 @@ export function RoomGuard({
     return (
       <div className="flex min-h-svh items-center justify-center animate-fade-in">
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          {status === "connected" ? "Restoring room..." : "Connecting..."}
+          {status === "connected"
+            ? "Restoring room..."
+            : status === "unreachable"
+              ? "Can't reach the server"
+              : "Connecting..."}
         </p>
       </div>
     );

@@ -9,9 +9,10 @@ import {
   type ReactNode,
 } from "react";
 import type { Socket } from "socket.io-client";
+import { env } from "./env";
 import { getSessionId, getSocket } from "./socket";
 
-type Status = "connecting" | "connected" | "disconnected";
+export type Status = "connecting" | "connected" | "disconnected" | "unreachable";
 
 interface SocketContextValue {
   socket: Socket;
@@ -20,6 +21,16 @@ interface SocketContextValue {
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null);
+
+/**
+ * Socket.IO retries forever, which makes a backend that is simply gone look
+ * exactly like a flaky network — both sit on "reconnecting" indefinitely.
+ * After a few failed attempts we probe /health directly. If that fails too,
+ * the server is unreachable and the UI should say so instead of implying the
+ * user's own connection is at fault.
+ */
+const FAILURES_BEFORE_HEALTH_PROBE = 3;
+const HEALTH_PROBE_TIMEOUT_MS = 5_000;
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
@@ -38,16 +49,50 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const socket = socketRef.current;
     if (!socket) return;
 
+    let disposed = false;
+    let failures = 0;
+    let probed = false;
+
+    async function probeHealth() {
+      try {
+        const res = await fetch(`${env.serverUrl}/health`, {
+          signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+        });
+        // A reachable server that answers means the transport is at fault
+        // (CORS, a proxy, the connection rate limiter) — leave the status on
+        // "disconnected" so the UI keeps promising a retry.
+        if (!disposed && !res.ok) setStatus("unreachable");
+      } catch {
+        // DNS failure, dead host, invalid certificate, or a CORS rejection.
+        // The browser reports these identically, and all of them mean the
+        // client cannot reach the backend at all.
+        if (!disposed) setStatus("unreachable");
+      }
+    }
+
     function onConnect() {
+      failures = 0;
+      probed = false;
       setStatus("connected");
     }
 
+    // Once a probe has established that the server is unreachable, keep saying
+    // so until a connection actually succeeds.
+    function degrade() {
+      setStatus((prev) => (prev === "unreachable" ? prev : "disconnected"));
+    }
+
     function onDisconnect() {
-      setStatus("disconnected");
+      degrade();
     }
 
     function onConnectError() {
-      setStatus("disconnected");
+      degrade();
+      failures += 1;
+      if (failures >= FAILURES_BEFORE_HEALTH_PROBE && !probed) {
+        probed = true;
+        void probeHealth();
+      }
     }
 
     function onSessionCreated(data: { sessionId: string }) {
@@ -66,6 +111,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.on("session:created", onSessionCreated);
 
     return () => {
+      disposed = true;
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("connect_error", onConnectError);

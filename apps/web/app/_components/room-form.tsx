@@ -151,8 +151,11 @@ export function RoomForm() {
       >
         {loading || status !== "connected" ? (
           <>
-            <span className="inline-block h-2 w-2 rounded-full animate-pulse-soft" style={{ background: "currentColor" }} />
-            Connecting…
+            {/* No pulse when the server is unreachable — nothing is in flight. */}
+            {status !== "unreachable" && (
+              <span className="inline-block h-2 w-2 rounded-full animate-pulse-soft" style={{ background: "currentColor" }} />
+            )}
+            {status === "unreachable" ? "Server unavailable" : "Connecting…"}
           </>
         ) : (
           <>

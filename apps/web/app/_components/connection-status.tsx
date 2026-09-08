@@ -1,17 +1,19 @@
 "use client";
 
-import { useSocket } from "../_lib/socket-context";
+import { useSocket, type Status } from "../_lib/socket-context";
 
-const labels: Record<string, string> = {
+const labels: Record<Status, string> = {
   connecting: "connecting",
   connected: "online",
   disconnected: "reconnecting",
+  unreachable: "server unreachable",
 };
 
-const dotColors: Record<string, string> = {
+const dotColors: Record<Status, string> = {
   connecting: "var(--warning)",
   connected: "var(--success)",
   disconnected: "var(--error)",
+  unreachable: "var(--error)",
 };
 
 /**

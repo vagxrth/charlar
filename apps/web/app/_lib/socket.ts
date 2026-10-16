@@ -97,6 +97,41 @@ function clearLegacyStorage(): void {
 }
 
 /**
+ * Socket.IO retries a connection that fails in transit, but stops for good
+ * when the server refuses one, as it does past its per-address connection
+ * limit; the tab would then sit on "reconnecting" until reloaded. So retry
+ * here: when the server says a slot frees up, or after a growing delay if it
+ * doesn't say (older servers). The jitter keeps tabs on one shared network
+ * from all coming back at the same moment.
+ */
+const REFUSED_RETRY_MIN_MS = 1_000;
+const REFUSED_RETRY_MAX_MS = 60_000;
+const REFUSED_RETRY_JITTER_MS = 1_000;
+let refusedRetries = 0;
+let refusedRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function retryAfterRefusal(err: Error): void {
+  const s = socket;
+  // Still active: the attempt failed in transit and Socket.IO is retrying it.
+  if (!s || s.active || refusedRetryTimer) return;
+
+  const hint = (err as Error & { data?: { retryAfterMs?: unknown } }).data?.retryAfterMs;
+  const wait =
+    typeof hint === "number" && Number.isFinite(hint)
+      ? hint
+      : REFUSED_RETRY_MIN_MS * 2 ** refusedRetries;
+  refusedRetries += 1;
+
+  const delay =
+    Math.min(Math.max(wait, REFUSED_RETRY_MIN_MS), REFUSED_RETRY_MAX_MS) +
+    Math.random() * REFUSED_RETRY_JITTER_MS;
+  refusedRetryTimer = setTimeout(() => {
+    refusedRetryTimer = null;
+    if (!s.active) s.connect();
+  }, delay);
+}
+
+/**
  * Return the singleton socket instance.
  *
  * On first call, creates and connects the socket.
@@ -119,6 +154,11 @@ export function getSocket(): Socket {
     reconnectionDelay: 1_000,
     reconnectionDelayMax: 10_000,
   });
+
+  socket.on("connect", () => {
+    refusedRetries = 0;
+  });
+  socket.on("connect_error", retryAfterRefusal);
 
   socket.on(
     "session:created",

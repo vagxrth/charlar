@@ -158,3 +158,61 @@ describe("sessions", () => {
     expect(tab2.connected).toBe(true);
   });
 });
+
+describe("room mode", () => {
+  it("announces room-mode support when a client connects", async () => {
+    const a = mk();
+    const s = await sessionCreated(a);
+    expect(s.features).toContain("room-mode");
+  });
+
+  it("keeps the creator's mode and hands it to joiners and presence", async () => {
+    const a = mk();
+    const b = mk();
+    await Promise.all([sessionCreated(a), sessionCreated(b)]);
+
+    const created = await emit<{ code: string; mode: string }>(
+      a,
+      "room:create",
+      "Alice",
+      "video"
+    );
+    expect(created.mode).toBe("video");
+
+    const join = await emit<{ ok: boolean; mode: string }>(
+      b,
+      "room:join",
+      created.code,
+      "Bob"
+    );
+    expect(join.ok).toBe(true);
+    expect(join.mode).toBe("video");
+
+    const presence = await emit<{ mode: string }>(b, "presence:request", created.code);
+    expect(presence.mode).toBe("video");
+  });
+
+  it("leaves the mode unknown when an older client doesn't send one", async () => {
+    const a = mk();
+    const b = mk();
+    await Promise.all([sessionCreated(a), sessionCreated(b)]);
+
+    // The pre-room-mode call shape: (nickname, callback).
+    const created = await emit<{ ok: boolean; code: string; mode: string | null }>(
+      a,
+      "room:create",
+      "Alice"
+    );
+    expect(created.ok).toBe(true);
+    expect(created.mode).toBeNull();
+
+    const join = await emit<{ ok: boolean; mode: string | null }>(
+      b,
+      "room:join",
+      created.code,
+      "Bob"
+    );
+    expect(join.ok).toBe(true);
+    expect(join.mode).toBeNull();
+  });
+});

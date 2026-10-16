@@ -11,7 +11,8 @@ export type RoomMode = "chat" | "video";
 
 export interface Room {
   code: string;
-  mode: RoomMode;
+  /** null when the creator's client predates room modes and didn't say. */
+  mode: RoomMode | null;
   participants: Set<string>; // session IDs
   createdAt: number;
 }
@@ -31,7 +32,7 @@ export class RoomService {
     return typeof code === "string" && ROOM_CODE_PATTERN.test(code);
   }
 
-  createRoom(sessionId: string, mode: RoomMode): RoomResult<{ code: string }> {
+  createRoom(sessionId: string, mode: RoomMode | null): RoomResult<{ code: string }> {
     // Prevent a single session from holding too many rooms
     const currentRooms = this.sessionToRooms.get(sessionId);
     if (currentRooms && currentRooms.size >= MAX_ROOMS_PER_SESSION) {

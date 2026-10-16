@@ -23,7 +23,7 @@ export const presenceHandler: SocketHandler = (_io, socket) => {
 
       callback({
         ok: true,
-        mode: roomService.getRoom(roomCode)?.mode ?? "chat",
+        mode: roomService.getRoom(roomCode)?.mode ?? null,
         participants: result.data,
         participantCount: result.data.length,
       });

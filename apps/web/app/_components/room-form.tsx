@@ -56,8 +56,9 @@ export function RoomForm() {
     setError("");
 
     try {
-      // The room's creator fixed its mode; route to that, not the local toggle.
-      const actualMode = await joinRoom(code, nickname);
+      // Route to the room's own mode; the toggle only counts when the server
+      // doesn't know it (older server, or a room from an older client).
+      const actualMode = await joinRoom(code, mode, nickname);
       router.push(`/room/${code}/${actualMode}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to join room");

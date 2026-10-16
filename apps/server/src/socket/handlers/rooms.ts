@@ -74,10 +74,13 @@ function deduplicateNickname(roomCode: string, nickname: string, selfId: string)
 export const roomsHandler: SocketHandler = (io, socket) => {
   // Signatures, newest first: (nickname, mode, cb), (nickname, cb), (cb).
   // The callback is always the last argument; nickname and mode are positional.
+  // Clients only send a mode after seeing "room-mode" in session:created;
+  // older clients don't, and their rooms get an unknown (null) mode.
   socket.on("room:create", (...args: unknown[]) => {
     const callback = ensureCallback(args[args.length - 1]);
     const rawNickname = typeof args[0] === "string" ? args[0] : undefined;
-    const mode = args[1] === "video" ? "video" : "chat";
+    const rawMode = args[1];
+    const mode = rawMode === "video" || rawMode === "chat" ? rawMode : null;
 
     const sessionId = getSessionId(socket);
     const result = roomService.createRoom(sessionId, mode);
@@ -134,7 +137,8 @@ export const roomsHandler: SocketHandler = (io, socket) => {
 
       const presence = presenceService.getRoomPresence(code, sessionId);
       const participantCount = presenceService.getParticipantCount(code);
-      const mode = roomService.getRoom(code)?.mode ?? "chat";
+      // null means unknown: the joiner keeps the mode it picked.
+      const mode = roomService.getRoom(code)?.mode ?? null;
 
       socket.to(code).emit("room:peer-joined", { sessionId, nickname, participantCount });
       logger.info({ session: sessionId.slice(0, 8), room: code, nickname, mode }, "room joined");

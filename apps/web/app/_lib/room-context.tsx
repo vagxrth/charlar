@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getSessionId as getSocketSessionId } from "./socket";
+import { getSessionId as getSocketSessionId, serverSupports } from "./socket";
 import { useSocket } from "./socket-context";
 
 export type Mode = "chat" | "video";
@@ -31,9 +31,10 @@ interface RoomState {
 interface RoomContextValue {
   room: RoomState | null;
   createRoom: (mode: Mode, nickname?: string) => Promise<string>;
-  // The room's mode is fixed by whoever created it; join returns it so the
-  // joiner routes to the right page regardless of which mode they picked.
-  joinRoom: (code: string, nickname?: string) => Promise<Mode>;
+  // Resolves with the room's mode, which its creator fixed, so the joiner
+  // routes to the right page. `mode` (the joiner's own pick) is only the
+  // fallback for rooms whose mode the server doesn't know.
+  joinRoom: (code: string, mode: Mode, nickname?: string) => Promise<Mode>;
   restoreRoom: (code: string, mode: Mode) => Promise<boolean>;
   leaveRoom: () => void;
 }
@@ -115,31 +116,40 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const createRoom = useCallback(
     (mode: Mode, nickname?: string): Promise<string> =>
       new Promise((resolve, reject) => {
-        socket.emit(
-          "room:create",
-          nickname ?? "",
-          mode,
-          (res: { ok: boolean; code?: string; mode?: Mode; nickname?: string; error?: string }) => {
-            if (!res.ok || !res.code) {
-              reject(new Error(res.error ?? "Failed to create room"));
-              return;
-            }
-            setRoom({
-              code: res.code,
-              mode: res.mode ?? mode,
-              nickname: res.nickname ?? "Guest",
-              participants: [],
-              participantCount: 1,
-            });
-            resolve(res.code);
+        const onCreated = (res: {
+          ok: boolean;
+          code?: string;
+          mode?: Mode | null;
+          nickname?: string;
+          error?: string;
+        }) => {
+          if (!res.ok || !res.code) {
+            reject(new Error(res.error ?? "Failed to create room"));
+            return;
           }
-        );
+          setRoom({
+            code: res.code,
+            mode: res.mode ?? mode,
+            nickname: res.nickname ?? "Guest",
+            participants: [],
+            participantCount: 1,
+          });
+          resolve(res.code);
+        };
+
+        // Only send the mode to a server that announced support for it; an
+        // older server would take the mode for the callback and never reply.
+        if (serverSupports("room-mode")) {
+          socket.emit("room:create", nickname ?? "", mode, onCreated);
+        } else {
+          socket.emit("room:create", nickname ?? "", onCreated);
+        }
       }),
     [socket]
   );
 
   const joinRoom = useCallback(
-    (code: string, nickname?: string): Promise<Mode> =>
+    (code: string, pickedMode: Mode, nickname?: string): Promise<Mode> =>
       new Promise((resolve, reject) => {
         socket.emit(
           "room:join",
@@ -148,7 +158,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           (res: {
             ok: boolean;
             error?: string;
-            mode?: Mode;
+            mode?: Mode | null;
             nickname?: string;
             participantCount?: number;
             participants?: Participant[];
@@ -157,7 +167,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               reject(new Error(res.error ?? "Failed to join room"));
               return;
             }
-            const mode: Mode = res.mode === "video" ? "video" : "chat";
+            // The server's mode wins; an older server, or a room made by an
+            // older client, doesn't know it, so keep the joiner's own pick.
+            const mode: Mode =
+              res.mode === "video" || res.mode === "chat" ? res.mode : pickedMode;
             setRoom({
               code,
               mode,
@@ -183,7 +196,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           (res: {
             ok: boolean;
             error?: string;
-            mode?: Mode;
+            mode?: Mode | null;
             participantCount?: number;
             participants?: Participant[];
           }) => {

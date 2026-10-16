@@ -42,7 +42,7 @@ export function connect(url: string, auth: Record<string, unknown> = {}): Socket
 /** Resolve with the session the server assigns on connect. */
 export function sessionCreated(
   socket: Socket
-): Promise<{ sessionId: string; resumeToken?: string }> {
+): Promise<{ sessionId: string; resumeToken?: string; features?: string[] }> {
   return new Promise((resolve) => socket.once("session:created", resolve));
 }
 

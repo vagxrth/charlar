@@ -7,8 +7,12 @@ const CODE_MAX = 999_999;
 const MAX_GENERATION_ATTEMPTS = 100;
 const ROOM_CODE_PATTERN = /^\d{6}$/;
 
+export type RoomMode = "chat" | "video";
+
 export interface Room {
   code: string;
+  /** null when the creator's client predates room modes and didn't say. */
+  mode: RoomMode | null;
   participants: Set<string>; // session IDs
   createdAt: number;
 }
@@ -28,7 +32,7 @@ export class RoomService {
     return typeof code === "string" && ROOM_CODE_PATTERN.test(code);
   }
 
-  createRoom(sessionId: string): RoomResult<{ code: string }> {
+  createRoom(sessionId: string, mode: RoomMode | null): RoomResult<{ code: string }> {
     // Prevent a single session from holding too many rooms
     const currentRooms = this.sessionToRooms.get(sessionId);
     if (currentRooms && currentRooms.size >= MAX_ROOMS_PER_SESSION) {
@@ -42,6 +46,7 @@ export class RoomService {
 
     const room: Room = {
       code,
+      mode,
       participants: new Set([sessionId]),
       createdAt: Date.now(),
     };

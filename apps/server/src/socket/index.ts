@@ -78,6 +78,13 @@ const EVENT_WINDOW_MS = 5_000;
 const REAP_INTERVAL_MS = 5 * 60_000;
 
 /**
+ * Protocol features this server supports, announced in session:created.
+ * The web app deploys separately (and sometimes first), so it only uses a
+ * newer call shape after the server it's talking to has announced it.
+ */
+const SERVER_FEATURES = ["room-mode"];
+
+/**
  * Resolve or create a session for the connecting socket.
  *
  * A client reclaims its previous session by sending both the sessionId and
@@ -223,7 +230,11 @@ export function initSocket(httpServer: HttpServer): Server {
 
     // Send the session ID and its resume token to this client only, so it can
     // reclaim the session after a reconnect
-    socket.emit("session:created", { sessionId, resumeToken: session.resumeToken });
+    socket.emit("session:created", {
+      sessionId,
+      resumeToken: session.resumeToken,
+      features: SERVER_FEATURES,
+    });
 
     // Register domain handlers
     for (const handler of handlers) {

@@ -19,6 +19,10 @@ interface StoredSession {
 let socket: Socket | null = null;
 let session: StoredSession | null = readStoredSession();
 
+// Protocol features the connected server announced in session:created. The
+// web app can deploy before the server, so newer call shapes wait for these.
+let serverFeatures = new Set<string>();
+
 function readStoredSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
 
@@ -87,9 +91,10 @@ export function getSocket(): Socket {
 
   socket.on(
     "session:created",
-    (data: { sessionId: string; resumeToken?: string }) => {
+    (data: { sessionId: string; resumeToken?: string; features?: string[] }) => {
       session = { sessionId: data.sessionId, resumeToken: data.resumeToken };
       storeSession(session);
+      serverFeatures = new Set(Array.isArray(data.features) ? data.features : []);
     }
   );
 
@@ -101,4 +106,9 @@ export function getSocket(): Socket {
 /** Read the current session ID (null if not yet assigned by server). */
 export function getSessionId(): string | null {
   return session?.sessionId ?? null;
+}
+
+/** Whether the connected server announced support for a protocol feature. */
+export function serverSupports(feature: string): boolean {
+  return serverFeatures.has(feature);
 }

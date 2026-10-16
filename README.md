@@ -178,7 +178,7 @@ charlar/
 
 ## Prerequisites
 
-- Node.js >= 18
+- Node.js >= 22.9 (the server's dev script loads `.env` with `--env-file-if-exists`)
 - pnpm 10.x (`corepack enable && corepack prepare pnpm@10.19.0 --activate`)
 - Docker (for TURN server)
 

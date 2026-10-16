@@ -14,7 +14,7 @@ app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(httpLogger);
-app.use(cors({ origin: config.corsOrigin }));
+app.use(cors({ origin: config.corsOrigins }));
 app.use(express.json());
 
 // Rate limit API endpoints — 30 requests per minute per IP

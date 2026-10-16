@@ -133,7 +133,7 @@ function resolveSession(
 export function initSocket(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
     cors: {
-      origin: config.corsOrigin,
+      origin: config.corsOrigins,
     },
     // Limit payload size — SDP is typically 2-10KB, 1MB is generous
     maxHttpBufferSize: 1e6,

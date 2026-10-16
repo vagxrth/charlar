@@ -12,6 +12,9 @@ export default defineConfig({
       STUN_URLS: "stun:stun.example.test:3478",
       TURN_URLS: "turn:turn.example.test:3478",
       TURN_SECRET: "test-secret",
+      // Two exact origins and a preview-deployment pattern, for the CORS tests.
+      CORS_ORIGIN: "http://localhost:3000, https://charlar.example.test",
+      CORS_ORIGIN_PATTERN: "https://charlar-[a-z0-9]{9}-team\\.vercel\\.app",
     },
     testTimeout: 15_000,
     hookTimeout: 20_000,

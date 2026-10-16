@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { RoomGuard } from "../../../../_components/room-guard";
 import { RoomHeader } from "../../../../_components/room-header";
 import { useRoom } from "../../../../_lib/room-context";
+import { useSocket } from "../../../../_lib/socket-context";
 import { useWebRTC } from "../_hooks/use-webrtc";
 import { VideoControls } from "./video-controls";
 
@@ -88,6 +89,7 @@ function ParticipantBadge({
 export function VideoRoom({ code }: { code: string }) {
   const router = useRouter();
   const { room, leaveRoom } = useRoom();
+  const { sessionId } = useSocket();
   const {
     localStream,
     remoteStream,
@@ -121,7 +123,9 @@ export function VideoRoom({ code }: { code: string }) {
     router.replace("/");
   }
 
-  const remotePeer = room?.participants.find((p) => p.online);
+  const remotePeer = room?.participants.find(
+    (p) => p.online && p.sessionId !== sessionId
+  );
   const remoteName = remotePeer?.nickname ?? "Peer";
 
   return (

@@ -201,7 +201,7 @@ export function initSocket(httpServer: HttpServer): Server {
       for (const code of codes) {
         void socket.join(code);
         const participantCount = presenceService.getParticipantCount(code);
-        socket.volatile.to(code).emit("room:peer-reconnected", {
+        socket.to(code).emit("room:peer-reconnected", {
           sessionId,
           nickname,
           participantCount,
@@ -235,7 +235,7 @@ export function initSocket(httpServer: HttpServer): Server {
         const codes = roomService.getRoomsBySession(session.id);
         for (const code of codes) {
           const participantCount = presenceService.getParticipantCount(code);
-          socket.volatile.to(code).emit("room:peer-disconnected", {
+          socket.to(code).emit("room:peer-disconnected", {
             sessionId: session.id,
             nickname: session.nickname,
             participantCount,

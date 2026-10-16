@@ -51,12 +51,15 @@ function resolveNickname(raw: unknown): string {
   return result.ok ? result.nickname : result.fallback;
 }
 
-function deduplicateNickname(roomCode: string, nickname: string): string {
+function deduplicateNickname(roomCode: string, nickname: string, selfId: string): string {
   const room = roomService.getRoom(roomCode);
   if (!room) return nickname;
 
+  // The joiner is already in the room by now; their own earlier nickname
+  // must not count as a clash.
   const existing = new Set<string>();
   for (const sid of room.participants) {
+    if (sid === selfId) continue;
     const s = sessionService.getById(sid);
     if (s?.nickname) existing.add(s.nickname);
   }
@@ -124,7 +127,7 @@ export const roomsHandler: SocketHandler = (io, socket) => {
         return;
       }
 
-      const nickname = deduplicateNickname(code, resolveNickname(rawNickname));
+      const nickname = deduplicateNickname(code, resolveNickname(rawNickname), sessionId);
       sessionService.setNickname(sessionId, nickname);
 
       void socket.join(code);
@@ -155,6 +158,14 @@ export const roomsHandler: SocketHandler = (io, socket) => {
       }
 
       const sessionId = getSessionId(socket);
+
+      // Only members may announce a departure; otherwise anyone who knows the
+      // code could broadcast room:peer-left into the room.
+      if (!roomService.isParticipant(code, sessionId)) {
+        callback({ ok: false, error: "Not a participant of this room" });
+        return;
+      }
+
       const nickname = sessionService.getById(sessionId)?.nickname ?? null;
       roomService.leaveRoom(code, sessionId);
       void socket.leave(code);

@@ -433,7 +433,14 @@ export function useWebRTC() {
       createPeer(data.sessionId, myId > data.sessionId);
     }
 
-    function onPeerLeft() {
+    function onPeerLeft(data: { sessionId: string }) {
+      // Only the peer we're connected to (or one whose offer is still
+      // queued) can end this call.
+      if (pendingOfferRef.current?.sessionId === data.sessionId) {
+        pendingOfferRef.current = null;
+      }
+      if (data.sessionId !== targetSessionIdRef.current) return;
+
       clearDisconnectedTimer();
       if (peerRef.current) {
         peerRef.current.close();

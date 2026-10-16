@@ -58,9 +58,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         const res = await fetch(`${env.serverUrl}/health`, {
           signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
         });
-        // A reachable server that answers means the transport is at fault
-        // (CORS, a proxy, the connection rate limiter) — leave the status on
-        // "disconnected" so the UI keeps promising a retry.
+        // A reachable server that answers means the connection itself is
+        // failing (CORS, a proxy, or the server's connection limit). A retry
+        // is coming either way, from Socket.IO or, after a refusal, from
+        // socket.ts, so leave the status on "disconnected" ("reconnecting").
         if (!disposed && !res.ok) setStatus("unreachable");
       } catch {
         // DNS failure, dead host, invalid certificate, or a CORS rejection.

@@ -26,15 +26,20 @@ export async function startTestServer(): Promise<TestServer> {
 
 let ipCounter = 1;
 
+/** A client address no other test has used. */
+export function nextIp(): string {
+  return `198.51.100.${ipCounter++}`;
+}
+
 /**
  * Connect a client with a distinct X-Forwarded-For, so the per-IP connection
- * limit (10/min) doesn't bleed across clients. Safe only because no proxy sits
+ * limit (60/min) doesn't bleed across clients. Safe only because no proxy sits
  * in front of the test server.
  */
 export function connect(url: string, auth: Record<string, unknown> = {}): Socket {
   return ioClient(url, {
     forceNew: true,
-    extraHeaders: { "x-forwarded-for": `198.51.100.${ipCounter++}` },
+    extraHeaders: { "x-forwarded-for": nextIp() },
     auth,
   });
 }

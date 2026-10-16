@@ -28,7 +28,11 @@ const handlers: SocketHandler[] = [
 ];
 
 // ── Connection rate limiting per IP ─────────────────────
-const MAX_CONNECTIONS_PER_WINDOW = 10;
+// Everyone behind one shared address (an office or campus network, a mobile
+// carrier's NAT) shares this budget, and every page load, tab and reconnect
+// counts against it. Sixty a minute lets a whole group arrive at once while
+// still holding any one address to a connection a second on average.
+const MAX_CONNECTIONS_PER_WINDOW = 60;
 const CONNECTION_WINDOW_MS = 60_000;
 const connectionTimestamps = new Map<string, number[]>();
 
@@ -37,8 +41,8 @@ const connectionTimestamps = new Map<string, number[]>();
  *
  * `handshake.address` is whoever opened the TCP connection, which behind Caddy
  * is the proxy itself — an identical value for every user, which would turn the
- * per-IP limit below into a global one (ten connections a minute for the whole
- * service, with Socket.IO's own retries consuming the budget). Express resolves
+ * per-IP limit below into a global one (one minute's budget for the whole
+ * service, with Socket.IO's own retries consuming it). Express resolves
  * this via `app.set("trust proxy", 1)`, but that is an Express setting and does
  * not reach Socket.IO, so the forwarded header has to be read here as well.
  *
@@ -53,7 +57,13 @@ function clientIp(socket: Socket): string {
   return chain?.split(",")[0]?.trim() || socket.handshake.address;
 }
 
-function isConnectionAllowed(ip: string): boolean {
+/**
+ * Count a new connection from `ip` against its limit. Returns 0 if it's
+ * allowed, or else how many milliseconds until the oldest counted connection
+ * leaves the window and frees a slot. Refused attempts aren't counted, so a
+ * client that waits that long gets in unless someone on its address beats it.
+ */
+function takeConnectionSlot(ip: string): number {
   const now = Date.now();
   const cutoff = now - CONNECTION_WINDOW_MS;
 
@@ -63,13 +73,16 @@ function isConnectionAllowed(ip: string): boolean {
     connectionTimestamps.set(ip, timestamps);
   }
 
-  while (timestamps.length > 0 && timestamps[0]! < cutoff) {
+  // A connection counts for exactly CONNECTION_WINDOW_MS.
+  while (timestamps.length > 0 && timestamps[0]! <= cutoff) {
     timestamps.shift();
   }
 
-  if (timestamps.length >= MAX_CONNECTIONS_PER_WINDOW) return false;
+  if (timestamps.length >= MAX_CONNECTIONS_PER_WINDOW) {
+    return timestamps[0]! + CONNECTION_WINDOW_MS - now;
+  }
   timestamps.push(now);
-  return true;
+  return 0;
 }
 
 // ── Per-socket event rate limiting ──────────────────────
@@ -158,12 +171,15 @@ export function initSocket(httpServer: HttpServer): Server {
 
   // ── Middleware ──────────────────────────────────────────
 
-  // Reject connections that exceed the per-IP rate limit
+  // Reject connections that exceed the per-IP rate limit, saying when a slot
+  // frees up. Socket.IO doesn't retry a refused connection by itself, so the
+  // web app waits that long and tries again.
   io.use((socket, next) => {
     const ip = clientIp(socket);
-    if (!isConnectionAllowed(ip)) {
-      logger.warn({ ip }, "connection rate limited");
-      next(new Error("Too many connections"));
+    const retryAfterMs = takeConnectionSlot(ip);
+    if (retryAfterMs > 0) {
+      logger.warn({ ip, retryAfterMs }, "connection rate limited");
+      next(Object.assign(new Error("Too many connections"), { data: { retryAfterMs } }));
       return;
     }
     next();
@@ -277,7 +293,7 @@ export function initSocket(httpServer: HttpServer): Server {
   const ipCleanupTimer = setInterval(() => {
     const cutoff = Date.now() - CONNECTION_WINDOW_MS;
     for (const [ip, timestamps] of connectionTimestamps) {
-      while (timestamps.length > 0 && timestamps[0]! < cutoff) {
+      while (timestamps.length > 0 && timestamps[0]! <= cutoff) {
         timestamps.shift();
       }
       if (timestamps.length === 0) connectionTimestamps.delete(ip);

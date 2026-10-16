@@ -7,9 +7,9 @@ Peer-to-peer video and text chat application built with WebRTC, Socket.IO, and N
 - **Text chat** with real-time message delivery, typing indicators, and presence awareness
 - **Video calling** with peer-to-peer WebRTC connections
 - **Room system** with 6-digit codes for easy sharing (max 2 participants per room)
-- **Session persistence** with 30-second reconnection grace period
+- **Session persistence** per browser tab, with a 30-second reconnection grace period (a reload rejoins the room)
 - **ICE restart** for automatic recovery from network disruptions
-- **Ephemeral TURN credentials** via HMAC-SHA1 (never exposes raw secrets to clients)
+- **Short-lived TURN credentials** via HMAC-SHA1, handed only to room members (the shared secret never leaves the server)
 - **Rate limiting** at every layer: HTTP, WebSocket connections, socket events, chat messages, and room join attempts
 
 ## Tech Stack
@@ -39,8 +39,8 @@ Peer-to-peer video and text chat application built with WebRTC, Socket.IO, and N
 
 | Technology | Purpose |
 |---|---|
-| Coturn | TURN relay server for WebRTC NAT traversal |
-| Docker + Docker Compose | TURN server containerisation |
+| Coturn 4.18 | TURN relay server for WebRTC NAT traversal (image pinned by digest) |
+| Docker + Docker Compose | Signaling, TURN and Caddy containers |
 | Google STUN servers | Public STUN for peer IP discovery |
 
 ### Deployment
@@ -60,6 +60,8 @@ Peer-to-peer video and text chat application built with WebRTC, Socket.IO, and N
 | TypeScript 5 | Type safety across all packages |
 | ESLint 9 | Linting with flat config |
 | Prettier | Code formatting |
+| Vitest | Server integration tests |
+| GitHub Actions | CI: types, lint and tests |
 
 ## Architecture
 
@@ -103,6 +105,7 @@ charlar/
 │   ├── server/                 # Express + Socket.IO signaling backend
 │   │   ├── src/
 │   │   │   ├── index.ts        # Entry point, graceful shutdown
+│   │   │   ├── server.ts       # Builds the HTTP + Socket.IO servers (entry point and tests)
 │   │   │   ├── app.ts          # Express app, routes, middleware
 │   │   │   ├── config/env.ts   # Environment variable config
 │   │   │   ├── logger.ts       # Pino logger setup
@@ -113,20 +116,22 @@ charlar/
 │   │   │   │       ├── rooms.ts      # room:create, room:join, room:leave
 │   │   │   │       ├── chat.ts       # chat:message, typing:start, typing:stop
 │   │   │   │       ├── presence.ts   # presence:request
-│   │   │   │       └── signaling.ts  # signal:offer, signal:answer, signal:ice-candidate
+│   │   │   │       ├── signaling.ts  # signal:offer, signal:answer, signal:ice-candidate, media:state
+│   │   │   │       └── ice.ts        # ice:config (TURN credentials for room members)
 │   │   │   └── services/
 │   │   │       ├── index.ts            # Singleton wiring
 │   │   │       ├── room-service.ts     # Room CRUD, 6-digit codes, max 2 participants
-│   │   │       ├── session-service.ts  # UUID sessions, reconnection grace period
+│   │   │       ├── session-service.ts  # UUID sessions, resume tokens, reconnection grace period
 │   │   │       ├── chat-service.ts     # Message validation, throttling
 │   │   │       ├── typing-service.ts   # Typing state with auto-expiry
 │   │   │       ├── presence-service.ts # Online/offline participant info
 │   │   │       └── ice-config-service.ts # STUN/TURN config, HMAC credential generation
+│   │   ├── test/               # Vitest integration tests against the real server
 │   │   └── Dockerfile          # Multi-stage production build
 │   │
 │   └── web/                    # Next.js 16 App Router frontend
 │       └── app/
-│           ├── layout.tsx      # Root layout (Outfit + Jakarta Sans fonts)
+│           ├── layout.tsx      # Root layout (Fraunces, Instrument Sans, JetBrains Mono)
 │           ├── page.tsx        # Home page (connection status, room form)
 │           ├── globals.css     # CSS custom properties, light/dark theme
 │           ├── _components/
@@ -134,10 +139,11 @@ charlar/
 │           │   ├── connection-status.tsx  # WebSocket status indicator
 │           │   ├── room-form.tsx          # Create/join room UI
 │           │   ├── room-guard.tsx         # Route protection
-│           │   └── room-header.tsx        # Room info bar + leave button
+│           │   ├── room-header.tsx        # Room info bar + leave button
+│           │   └── logo.tsx               # Brand mark
 │           ├── _lib/
 │           │   ├── env.ts              # NEXT_PUBLIC env vars
-│           │   ├── socket.ts           # Singleton socket factory
+│           │   ├── socket.ts           # Singleton socket, per-tab session, early call signals
 │           │   ├── socket-context.tsx   # SocketProvider + useSocket hook
 │           │   ├── room-context.tsx     # RoomProvider + useRoom hook
 │           │   ├── webrtc.ts           # PeerManager class + fetchIceServers
@@ -154,9 +160,8 @@ charlar/
 │                   └── _hooks/use-webrtc.ts
 │
 ├── packages/
-│   ├── ui/                     # Shared React component library
 │   ├── tailwind-config/        # Shared Tailwind + PostCSS config
-│   ├── typescript-config/      # Shared tsconfig (base, node, nextjs, react-library)
+│   ├── typescript-config/      # Shared tsconfig (base, node, nextjs)
 │   └── eslint-config/          # Shared ESLint flat configs
 │
 ├── infrastructure/
@@ -165,12 +170,13 @@ charlar/
 │   ├── signaling.env.example   # Signaling server env template
 │   ├── verify-turn.mjs         # End-to-end TURN relay check (exit 0/1)
 │   └── turn/                   # Coturn TURN server
-│       ├── Dockerfile
+│       ├── Dockerfile          # coturn 4.18, pinned by digest
 │       ├── docker-entrypoint.sh # Resolves advertised IPs, then execs turnserver
 │       ├── docker-compose.yml  # Standalone TURN-only compose (optional)
 │       ├── turnserver.conf     # Config template with ${ENV_VAR} placeholders
 │       └── .env.example
 │
+├── .github/workflows/ci.yml    # CI: check-types, lint, test
 ├── turbo.json
 ├── pnpm-workspace.yaml
 └── package.json
@@ -226,7 +232,15 @@ pnpm dev
 
 This starts both the backend (port 3001) and frontend (port 3000) with hot reload via Turborepo.
 
-### 4. (Optional) Local TURN server
+### 4. Run the checks
+
+```bash
+pnpm turbo run check-types lint test
+```
+
+The server's tests (Vitest, in `apps/server/test`) start the real server on a free port and drive it with `socket.io-client`. CI runs the same command on every pull request and every push to `main`.
+
+### 5. (Optional) Local TURN server
 
 Only needed for testing TURN relay — most local connections work with STUN alone.
 
@@ -292,8 +306,9 @@ DOMAIN=api.your-domain.com
 # Create env files
 cp signaling.env.example signaling.env
 sed -i "s|^TURN_SECRET=.*|TURN_SECRET=$TURN_SECRET|" signaling.env
-sed -i "s|charlar.vagarth.in|your-frontend-domain.com|g" signaling.env
+# The API domain first: the frontend domain is part of it.
 sed -i "s|api.charlar.vagarth.in|$DOMAIN|g" signaling.env
+sed -i "s|charlar.vagarth.in|your-frontend-domain.com|g" signaling.env
 
 cp turn/.env.example turn/.env
 sed -i "s|^TURN_SECRET=.*|TURN_SECRET=$TURN_SECRET|" turn/.env
@@ -322,7 +337,8 @@ curl https://api.<your-domain>/health
 # {"status":"ok","uptime":...,"rooms":0,"sessions":0}
 
 curl https://api.<your-domain>/api/ice-config
-# {"iceServers":[{"urls":["stun:..."]},{"urls":["turn:..."],"username":"...","credential":"..."}]}
+# {"iceServers":[{"urls":["stun:..."]}]}
+# STUN only: room members get TURN credentials over the socket.
 ```
 
 Then check the relay itself — a misconfigured TURN server fails silently, since
@@ -352,7 +368,9 @@ node infrastructure/verify-turn.mjs api.<your-domain>
    NEXT_PUBLIC_SERVER_URL=https://api.<your-domain>
    ```
 
-4. Deploy. `TURN_SECRET` is **never set on Vercel** — it stays server-side. The frontend fetches ephemeral credentials from `/api/ice-config` at runtime.
+4. Deploy. `TURN_SECRET` is **never set on Vercel** — it stays server-side. Once in a room, the frontend asks the signaling server for short-lived TURN credentials over the socket (`ice:config`).
+
+Preview deployments have their own URLs, which the server doesn't allow by default. To let them reach the API, set `CORS_ORIGIN_PATTERN` in `signaling.env` (see `signaling.env.example`) and restart signaling.
 
 ## Socket Events
 
@@ -360,22 +378,26 @@ node infrastructure/verify-turn.mjs api.<your-domain>
 
 | Event | Payload | Response |
 |---|---|---|
-| `room:create` | `(nickname?, callback)` | `{ ok, code, participantCount, nickname }` |
-| `room:join` | `(code, nickname?, callback)` | `{ ok, nickname, participantCount, participants[] }` |
-| `room:leave` | `(code, callback)` | `{ ok }` |
+| `room:create` | `(nickname?, mode?, callback)`, mode `"chat"` or `"video"` | `{ ok, code, mode, participantCount, nickname }` |
+| `room:join` | `(code, nickname?, callback)` | `{ ok, nickname, mode, participantCount, participants[] }` |
+| `room:leave` | `(code, callback)` | `{ ok }` (members only) |
 | `chat:message` | `{ roomCode, content }` | `{ ok, id, timestamp }` |
 | `typing:start` | `(roomCode, callback)` | `{ ok }` |
 | `typing:stop` | `(roomCode, callback)` | `{ ok }` |
-| `presence:request` | `(roomCode, callback)` | `{ ok, participants[], participantCount }` |
+| `presence:request` | `(roomCode, callback)` | `{ ok, mode, participants[], participantCount }` |
 | `signal:offer` | `{ roomCode, targetSessionId, sdp }` | `{ ok }` |
 | `signal:answer` | `{ roomCode, targetSessionId, sdp }` | `{ ok }` |
 | `signal:ice-candidate` | `{ roomCode, targetSessionId, candidate }` | `{ ok }` |
+| `media:state` | `{ roomCode, audioMuted, videoOff }` | `{ ok }` |
+| `ice:config` | `(callback)` | `{ ok, iceServers[] }` (room members only) |
+
+A failed request is acknowledged with `{ ok: false, error }`. A room created without a mode reports `mode: null`, and the joiner keeps the mode it picked.
 
 ### Server to Client
 
 | Event | Payload | Target |
 |---|---|---|
-| `session:created` | `{ sessionId }` | Connecting socket |
+| `session:created` | `{ sessionId, resumeToken, features[] }` | Connecting socket |
 | `room:peer-joined` | `{ sessionId, nickname, participantCount }` | Room (excl. sender) |
 | `room:peer-left` | `{ sessionId, nickname, participantCount }` | Room |
 | `room:peer-disconnected` | `{ sessionId, nickname, participantCount }` | Room |
@@ -384,13 +406,17 @@ node infrastructure/verify-turn.mjs api.<your-domain>
 | `typing:start` / `typing:stop` | `{ sessionId }` | Room |
 | `signal:offer` / `signal:answer` | `{ sessionId, sdp }` | Target socket |
 | `signal:ice-candidate` | `{ sessionId, candidate }` | Target socket |
+| `media:state` | `{ sessionId, audioMuted, videoOff }` | Room (excl. sender) |
+
+The client keeps `{ sessionId, resumeToken }` in its tab's `sessionStorage` and sends it in the handshake `auth`; with a matching token the server hands back the same session and rejoins its rooms. `features` lists what the server supports (`room-mode`, `ice-config`), so the web app can deploy before the server and fall back to the older calls.
 
 ## WebRTC Call Flow
 
 1. Both peers join a room via socket events
-2. Both fetch local media (camera + mic) and ICE server config in parallel
+2. Both fetch local media (camera + mic) and ICE server config in parallel; the config comes over the socket (`ice:config`)
 3. The peer with the lexicographically higher `sessionId` sends the offer (deterministic, no coordination needed)
-4. Offer/answer and ICE candidates are relayed through the signaling server
+4. Offer/answer and ICE candidates are relayed through the signaling server. Any that arrive before the video page has mounted, which is common right after joining, are held for up to 60 seconds and replayed
 5. Once ICE connectivity is established, media flows directly peer-to-peer
 6. If the connection drops, automatic ICE restart is attempted (max 2 times)
 7. If the peer's socket disconnects but the session is within the 30s grace period, the WebRTC connection is kept alive waiting for reconnection
+8. After a reload, the tab reclaims its session and rejoins the room, and the call is renegotiated with the higher-id side offering

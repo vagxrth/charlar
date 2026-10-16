@@ -42,6 +42,9 @@ importers:
         specifier: ^4.8.3
         version: 4.8.3
     devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
@@ -54,6 +57,9 @@ importers:
       '@types/node':
         specifier: ^22.15.0
         version: 22.18.12
+      eslint:
+        specifier: ^9.39.1
+        version: 9.39.1(jiti@2.6.1)
       tsx:
         specifier: ^4.19.0
         version: 4.21.0
@@ -1272,6 +1278,7 @@ packages:
   eslint@9.39.1:
     resolution: {integrity: sha512-BhHmn2yNOFA9H9JmmIVKJmd288g9hrVRDkdoIgRCRuSySRUHH7r/DI6aAXW9T1WwUuY3DFgrcaqB+deURBLR5g==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'

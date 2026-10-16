@@ -1,4 +1,3 @@
-import "@repo/ui/styles.css";
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Instrument_Sans, JetBrains_Mono } from "next/font/google";

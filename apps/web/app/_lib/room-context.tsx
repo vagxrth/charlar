@@ -9,7 +9,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getSessionId as getSocketSessionId, serverSupports } from "./socket";
+import {
+  ACK_TIMEOUT_MS,
+  getSessionId as getSocketSessionId,
+  serverSupports,
+} from "./socket";
 import { useSocket } from "./socket-context";
 
 export type Mode = "chat" | "video";
@@ -41,6 +45,8 @@ interface RoomContextValue {
 
 // Per tab, like the session it belongs to (see socket.ts).
 const ROOM_STORAGE_KEY = "charlar.room";
+
+const NO_REPLY = "The server didn't respond. Try again.";
 
 const RoomContext = createContext<RoomContextValue | null>(null);
 
@@ -116,13 +122,20 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const createRoom = useCallback(
     (mode: Mode, nickname?: string): Promise<string> =>
       new Promise((resolve, reject) => {
-        const onCreated = (res: {
-          ok: boolean;
-          code?: string;
-          mode?: Mode | null;
-          nickname?: string;
-          error?: string;
-        }) => {
+        const onCreated = (
+          err: Error | null,
+          res?: {
+            ok: boolean;
+            code?: string;
+            mode?: Mode | null;
+            nickname?: string;
+            error?: string;
+          }
+        ) => {
+          if (err || !res) {
+            reject(new Error(NO_REPLY));
+            return;
+          }
           if (!res.ok || !res.code) {
             reject(new Error(res.error ?? "Failed to create room"));
             return;
@@ -139,10 +152,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
         // Only send the mode to a server that announced support for it; an
         // older server would take the mode for the callback and never reply.
+        const timed = socket.timeout(ACK_TIMEOUT_MS);
         if (serverSupports("room-mode")) {
-          socket.emit("room:create", nickname ?? "", mode, onCreated);
+          timed.emit("room:create", nickname ?? "", mode, onCreated);
         } else {
-          socket.emit("room:create", nickname ?? "", onCreated);
+          timed.emit("room:create", nickname ?? "", onCreated);
         }
       }),
     [socket]
@@ -151,18 +165,25 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const joinRoom = useCallback(
     (code: string, pickedMode: Mode, nickname?: string): Promise<Mode> =>
       new Promise((resolve, reject) => {
-        socket.emit(
+        socket.timeout(ACK_TIMEOUT_MS).emit(
           "room:join",
           code,
           nickname ?? "",
-          (res: {
-            ok: boolean;
-            error?: string;
-            mode?: Mode | null;
-            nickname?: string;
-            participantCount?: number;
-            participants?: Participant[];
-          }) => {
+          (
+            err: Error | null,
+            res?: {
+              ok: boolean;
+              error?: string;
+              mode?: Mode | null;
+              nickname?: string;
+              participantCount?: number;
+              participants?: Participant[];
+            }
+          ) => {
+            if (err || !res) {
+              reject(new Error(NO_REPLY));
+              return;
+            }
             if (!res.ok) {
               reject(new Error(res.error ?? "Failed to join room"));
               return;
@@ -190,45 +211,63 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       new Promise((resolve) => {
         const storedRoom = readStoredRoom();
 
-        socket.emit(
-          "presence:request",
-          code,
-          (res: {
-            ok: boolean;
-            error?: string;
-            mode?: Mode | null;
-            participantCount?: number;
-            participants?: Participant[];
-          }) => {
-            if (!res.ok) {
-              if (storedRoom?.code === code) {
-                writeStoredRoom(null);
+        const attempt = (retriesLeft: number) => {
+          socket.timeout(ACK_TIMEOUT_MS).emit(
+            "presence:request",
+            code,
+            (
+              err: Error | null,
+              res?: {
+                ok: boolean;
+                error?: string;
+                mode?: Mode | null;
+                participantCount?: number;
+                participants?: Participant[];
               }
-              setRoom((prev) => (prev?.code === code ? null : prev));
-              resolve(false);
-              return;
+            ) => {
+              if (err || !res) {
+                // No reply: ask once more before giving up on the room. The
+                // stored room is kept, so a reload can still restore it.
+                if (retriesLeft > 0) {
+                  attempt(retriesLeft - 1);
+                } else {
+                  resolve(false);
+                }
+                return;
+              }
+
+              if (!res.ok) {
+                if (storedRoom?.code === code) {
+                  writeStoredRoom(null);
+                }
+                setRoom((prev) => (prev?.code === code ? null : prev));
+                resolve(false);
+                return;
+              }
+
+              const participants = res.participants ?? [];
+              const currentSessionId = sessionId ?? getSocketSessionId();
+              const ownParticipant = participants.find(
+                (participant) => participant.sessionId === currentSessionId
+              );
+
+              setRoom({
+                code,
+                mode: res.mode ?? mode,
+                nickname:
+                  ownParticipant?.nickname ??
+                  storedRoom?.nickname ??
+                  roomRef.current?.nickname ??
+                  "Guest",
+                participants,
+                participantCount: res.participantCount ?? participants.length,
+              });
+              resolve(true);
             }
+          );
+        };
 
-            const participants = res.participants ?? [];
-            const currentSessionId = sessionId ?? getSocketSessionId();
-            const ownParticipant = participants.find(
-              (participant) => participant.sessionId === currentSessionId
-            );
-
-            setRoom({
-              code,
-              mode: res.mode ?? mode,
-              nickname:
-                ownParticipant?.nickname ??
-                storedRoom?.nickname ??
-                roomRef.current?.nickname ??
-                "Guest",
-              participants,
-              participantCount: res.participantCount ?? participants.length,
-            });
-            resolve(true);
-          }
-        );
+        attempt(1);
       }),
     [socket, sessionId]
   );

@@ -18,15 +18,15 @@ docker compose up
 The backend's `IceConfigService` generates ephemeral HMAC-SHA1 credentials that coturn validates via the shared secret.
 
 1. Set `TURN_SECRET` identically in both `apps/server/.env` and `infrastructure/turn/.env`
-2. Set `TURN_URLS` in `apps/server/.env` to `turn:<your-server>:3478,turns:<your-server>:5349`
-3. Credentials are generated per-request and auto-expire (default 24 h)
+2. Set `TURN_URLS` in `apps/server/.env` to `turn:<your-server>:3478?transport=udp,turn:<your-server>:3478?transport=tcp`. Add a `turns:` URL only once TLS is enabled; until then it points at a port nothing listens on.
+3. Credentials are generated per request, only for sessions in a room (over the socket's `ice:config`), and expire after `TURN_CREDENTIAL_TTL` (default 4 h)
 
 ## Security recommendations
 
 - **Use TURNS (TLS on port 5349) in production** — prevents eavesdropping on relay traffic
 - **Use ephemeral credentials** (TURN_SECRET) not static — credentials auto-expire
 - **RFC 1918 relay blocking** is already configured — prevents using TURN as a network pivot into internal infrastructure
-- **Firewall**: only expose ports 3478, 5349, and the relay range (49152–65535/udp)
+- **Firewall**: only expose port 3478 and the relay range (49152–65535/udp); add 5349 once TLS is on
 - **Rotate TURN_SECRET periodically** — update backend env simultaneously and restart both services
 - **Run behind a reverse proxy** for TLS termination, or use coturn's native TLS with your own certs
 
@@ -34,7 +34,7 @@ The backend's `IceConfigService` generates ephemeral HMAC-SHA1 credentials that 
 
 - Each relayed video call uses ~1.5–4 Mbps bidirectional (720p)
 - The 16k relay port range (49152–65535) supports ~8k concurrent sessions
-- `total-quota` in `turnserver.conf` caps concurrent relay allocations (not bandwidth); `bps-capacity` is the bandwidth control and is currently unlimited
+- `total-quota` in `turnserver.conf` caps concurrent relay allocations (not bandwidth), `user-quota` caps them per credential, and `max-bps` caps each allocation at about 4 Mbit/s; the server-wide `bps-capacity` is unlimited
 - TURN is only used when direct P2P fails (~15–20% of connections); most traffic is peer-to-peer
 - Monitor with coturn's Prometheus exporter or log-based metrics
 - Watch bandwidth billing on cloud providers (AWS, GCP charge per-GB egress)

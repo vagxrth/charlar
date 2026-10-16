@@ -13,6 +13,7 @@ import {
 } from "../services/index.js";
 import type { Session } from "../services/session-service.js";
 import { chatHandler } from "./handlers/chat.js";
+import { iceHandler } from "./handlers/ice.js";
 import { presenceHandler } from "./handlers/presence.js";
 import { roomsHandler } from "./handlers/rooms.js";
 import { signalingHandler } from "./handlers/signaling.js";
@@ -23,6 +24,7 @@ const handlers: SocketHandler[] = [
   chatHandler,
   presenceHandler,
   signalingHandler,
+  iceHandler,
 ];
 
 // ── Connection rate limiting per IP ─────────────────────
@@ -82,7 +84,7 @@ const REAP_INTERVAL_MS = 5 * 60_000;
  * The web app deploys separately (and sometimes first), so it only uses a
  * newer call shape after the server it's talking to has announced it.
  */
-const SERVER_FEATURES = ["room-mode"];
+const SERVER_FEATURES = ["room-mode", "ice-config"];
 
 /**
  * Resolve or create a session for the connecting socket.
@@ -131,7 +133,7 @@ function resolveSession(
 export function initSocket(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
     cors: {
-      origin: config.corsOrigin,
+      origin: config.corsOrigins,
     },
     // Limit payload size — SDP is typically 2-10KB, 1MB is generous
     maxHttpBufferSize: 1e6,

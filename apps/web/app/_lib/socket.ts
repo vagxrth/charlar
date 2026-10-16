@@ -11,6 +11,13 @@ const SESSION_STORAGE_KEY = "charlar.session";
 // Earlier builds kept these in localStorage, which every tab shared.
 const LEGACY_LOCAL_KEYS = ["charlar.sessionId", "charlar.room"];
 
+/**
+ * How long to wait for the server to acknowledge a request before treating
+ * it as failed. The server drops events over its rate limit without replying,
+ * so without this a lost reply leaves the UI waiting forever.
+ */
+export const ACK_TIMEOUT_MS = 10_000;
+
 interface StoredSession {
   sessionId: string;
   resumeToken?: string;
@@ -22,6 +29,30 @@ let session: StoredSession | null = readStoredSession();
 // Protocol features the connected server announced in session:created. The
 // web app can deploy before the server, so newer call shapes wait for these.
 let serverFeatures = new Set<string>();
+let featuresKnown = false;
+
+/**
+ * Call signaling that arrived while no video page was listening. The other
+ * person sends their offer the moment we join, often while this tab is still
+ * navigating from the lobby; without this it would be dropped and the call
+ * would never connect. Held briefly, then replayed when the video page mounts.
+ */
+export interface EarlySignal {
+  event: "signal:offer" | "signal:ice-candidate";
+  data: { sessionId: string } & Record<string, unknown>;
+  at: number;
+}
+
+const EARLY_SIGNAL_TTL_MS = 60_000;
+const EARLY_SIGNAL_LIMIT = 100;
+let earlySignals: EarlySignal[] = [];
+let signalConsumerAttached = false;
+
+function holdEarlySignal(event: EarlySignal["event"], data: EarlySignal["data"]): void {
+  if (signalConsumerAttached) return;
+  earlySignals.push({ event, data, at: Date.now() });
+  if (earlySignals.length > EARLY_SIGNAL_LIMIT) earlySignals.shift();
+}
 
 function readStoredSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
@@ -95,7 +126,13 @@ export function getSocket(): Socket {
       session = { sessionId: data.sessionId, resumeToken: data.resumeToken };
       storeSession(session);
       serverFeatures = new Set(Array.isArray(data.features) ? data.features : []);
+      featuresKnown = true;
     }
+  );
+
+  socket.on("signal:offer", (data: EarlySignal["data"]) => holdEarlySignal("signal:offer", data));
+  socket.on("signal:ice-candidate", (data: EarlySignal["data"]) =>
+    holdEarlySignal("signal:ice-candidate", data)
   );
 
   socket.connect();
@@ -108,7 +145,44 @@ export function getSessionId(): string | null {
   return session?.sessionId ?? null;
 }
 
+/**
+ * Called by the video page once its own signaling listeners are registered:
+ * stops holding signals and returns those that arrived earlier, oldest first.
+ */
+export function attachSignalConsumer(): EarlySignal[] {
+  signalConsumerAttached = true;
+  const cutoff = Date.now() - EARLY_SIGNAL_TTL_MS;
+  const held = earlySignals.filter((s) => s.at >= cutoff);
+  earlySignals = [];
+  return held;
+}
+
+/** Called when the video page unmounts, so signals are held again. */
+export function detachSignalConsumer(): void {
+  signalConsumerAttached = false;
+}
+
 /** Whether the connected server announced support for a protocol feature. */
 export function serverSupports(feature: string): boolean {
   return serverFeatures.has(feature);
+}
+
+/**
+ * Resolve true once the server has announced its features, or false after
+ * `timeoutMs`. Needed right after a reload, before session:created arrives.
+ */
+export function whenServerKnown(timeoutMs: number): Promise<boolean> {
+  const s = socket;
+  if (featuresKnown || !s) return Promise.resolve(featuresKnown);
+
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      s.off("session:created", done);
+      resolve(featuresKnown);
+    };
+    const timer = setTimeout(done, timeoutMs);
+    // Registered after getSocket's own listener, so features are set by now.
+    s.on("session:created", done);
+  });
 }

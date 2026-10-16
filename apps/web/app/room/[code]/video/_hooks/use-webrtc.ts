@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getLocalStream, stopStream } from "../../../../_lib/media";
 import { useRoom } from "../../../../_lib/room-context";
+import {
+  attachSignalConsumer,
+  detachSignalConsumer,
+} from "../../../../_lib/socket";
 import { useSocket } from "../../../../_lib/socket-context";
 import { fetchIceServers, PeerManager } from "../../../../_lib/webrtc";
 
@@ -95,6 +99,9 @@ export function useWebRTC() {
     sessionId: string;
     sdp: RTCSessionDescriptionInit;
   } | null>(null);
+
+  // ICE candidates that arrived for the pending offer, applied with it.
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   // ── Helpers ─────────────────────────────────────────────
 
@@ -349,7 +356,7 @@ export function useWebRTC() {
       try {
         const [stream, iceServers] = await Promise.all([
           getLocalStream(),
-          fetchIceServers(),
+          fetchIceServers(socket),
         ]);
 
         if (cancelled) {
@@ -369,6 +376,12 @@ export function useWebRTC() {
           createPeer(pending.sessionId, false);
           const peer = peerRef.current;
           if (peer) {
+            // Candidates that came with the offer; PeerManager holds them
+            // until handleOffer sets the remote description.
+            for (const candidate of pendingCandidatesRef.current) {
+              peer.addIceCandidate(candidate);
+            }
+            pendingCandidatesRef.current = [];
             const answer = await peer.handleOffer(pending.sdp);
             const roomCode = roomCodeRef.current;
             if (roomCode) {
@@ -435,9 +448,11 @@ export function useWebRTC() {
       sessionId: string;
       sdp: RTCSessionDescriptionInit;
     }) {
-      // If media isn't ready yet, queue the offer for later
+      // If media isn't ready yet, queue the offer for later. A newer offer
+      // replaces an older one, and only its own candidates apply.
       if (!localStreamRef.current || !iceServersRef.current) {
         pendingOfferRef.current = data;
+        pendingCandidatesRef.current = [];
         return;
       }
 
@@ -518,17 +533,40 @@ export function useWebRTC() {
       sessionId: string;
       candidate: RTCIceCandidateInit;
     }) {
-      peerRef.current?.addIceCandidate(data.candidate);
+      const peer = peerRef.current;
+      if (peer && targetSessionIdRef.current === data.sessionId) {
+        peer.addIceCandidate(data.candidate);
+        return;
+      }
+      // No connection to this sender yet, but its offer is waiting for our
+      // media: keep the candidate for when that offer is answered.
+      if (pendingOfferRef.current?.sessionId === data.sessionId) {
+        pendingCandidatesRef.current.push(data.candidate);
+      }
     }
 
     socket.on("signal:offer", onOffer);
     socket.on("signal:answer", onAnswer);
     socket.on("signal:ice-candidate", onIceCandidate);
 
+    // Replay signaling that arrived before this page was listening — e.g.
+    // the other person's offer, sent while we were still on the lobby.
+    // Only from people in this room, in case some is left from another.
+    const members = new Set(participantsRef.current.map((p) => p.sessionId));
+    for (const held of attachSignalConsumer()) {
+      if (members.size > 0 && !members.has(held.data.sessionId)) continue;
+      if (held.event === "signal:offer") {
+        onOffer(held.data as unknown as Parameters<typeof onOffer>[0]);
+      } else {
+        onIceCandidate(held.data as unknown as Parameters<typeof onIceCandidate>[0]);
+      }
+    }
+
     return () => {
       socket.off("signal:offer", onOffer);
       socket.off("signal:answer", onAnswer);
       socket.off("signal:ice-candidate", onIceCandidate);
+      detachSignalConsumer();
     };
   }, [socket, createPeer]);
 
@@ -543,6 +581,7 @@ export function useWebRTC() {
       // queued) can end this call.
       if (pendingOfferRef.current?.sessionId === data.sessionId) {
         pendingOfferRef.current = null;
+        pendingCandidatesRef.current = [];
       }
       if (data.sessionId !== targetSessionIdRef.current) return;
 

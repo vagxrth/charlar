@@ -61,6 +61,12 @@ export function RoomForm() {
       const actualMode = await joinRoom(code, mode, nickname);
       router.push(`/room/${code}/${actualMode}`);
     } catch (err) {
+      // Still a member from before (e.g. a restore that gave up): go back in
+      // and let the room page restore it, rather than showing an error.
+      if (err instanceof Error && err.message === "Already in this room") {
+        router.push(`/room/${code}/${mode}`);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to join room");
       setLoading(false);
     }

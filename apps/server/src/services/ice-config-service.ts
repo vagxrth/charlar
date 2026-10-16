@@ -68,6 +68,11 @@ export class IceConfigService {
     return servers;
   }
 
+  /** STUN servers only — safe to hand to anyone, since they need no credentials. */
+  getStunServers(): IceServer[] {
+    return this.stunUrls.length > 0 ? [{ urls: this.stunUrls }] : [];
+  }
+
   // ── private ────────────────────────────────────────────────
 
   /**

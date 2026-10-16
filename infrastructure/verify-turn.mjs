@@ -21,6 +21,7 @@
 import dgram from "node:dgram";
 import crypto from "node:crypto";
 import { resolve4 } from "node:dns/promises";
+import { createRequire } from "node:module";
 
 const MAGIC = 0x2112a442;
 const ALLOCATE = 0x0003;
@@ -108,6 +109,71 @@ function errorText(attrs) {
   return `${e[2] * 100 + e[3]} ${e.subarray(4).toString()}`;
 }
 
+// ── Getting credentials ──────────────────────────────────
+
+/**
+ * Fetch ICE servers the way the browser does. Servers that announce
+ * "ice-config" only give TURN credentials to room members over Socket.IO, so
+ * connect, open a throwaway room, ask, and leave; older servers still hand
+ * them out over HTTP.
+ */
+async function fetchIceServers(host) {
+  const url = `https://${host}`;
+  let io;
+  try {
+    ({ io } = createRequire(new URL("../apps/web/package.json", import.meta.url))(
+      "socket.io-client"
+    ));
+  } catch {
+    throw new Error("socket.io-client not found — run pnpm install in the repo first");
+  }
+
+  const socket = io(url, { transports: ["websocket"], forceNew: true, reconnection: false });
+  try {
+    const session = await new Promise((resolvePromise, reject) => {
+      const timer = setTimeout(() => reject(new Error("no session from the server within 10s")), 10_000);
+      socket.once("session:created", (data) => {
+        clearTimeout(timer);
+        resolvePromise(data);
+      });
+      socket.once("connect_error", (err) => {
+        clearTimeout(timer);
+        reject(new Error(`socket connection failed: ${err.message}`));
+      });
+    });
+
+    if (!session.features?.includes("ice-config")) {
+      info("server predates ice:config — using the HTTP endpoint");
+      return await fetchOverHttp(url);
+    }
+
+    const ack = (...args) =>
+      new Promise((resolvePromise, reject) => {
+        socket.timeout(10_000).emit(...args, (err, res) =>
+          err ? reject(new Error(`no reply to ${args[0]}`)) : resolvePromise(res)
+        );
+      });
+
+    const room = await ack("room:create", "verify-turn");
+    if (!room.ok) throw new Error(`room:create failed: ${room.error}`);
+    try {
+      const res = await ack("ice:config");
+      if (!res.ok) throw new Error(`ice:config failed: ${res.error}`);
+      return res.iceServers;
+    } finally {
+      await ack("room:leave", room.code).catch(() => {});
+    }
+  } finally {
+    socket.disconnect();
+  }
+}
+
+async function fetchOverHttp(url) {
+  const res = await fetch(`${url}/api/ice-config`, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()).iceServers;
+}
+
 // ── The check ────────────────────────────────────────────
 
 /** Runs the Allocate handshake, returning the mapped and relayed addresses. */
@@ -190,14 +256,10 @@ async function main() {
   // 1. Credentials, fetched exactly the way the browser fetches them.
   let iceServers;
   try {
-    const res = await fetch(`https://${host}/api/ice-config`, {
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    ({ iceServers } = await res.json());
-    ok(`fetched /api/ice-config (${iceServers.length} ICE server entries)`);
+    iceServers = await fetchIceServers(host);
+    ok(`fetched the ICE config (${iceServers.length} ICE server entries)`);
   } catch (err) {
-    bad(`could not fetch https://${host}/api/ice-config — ${err.message}`);
+    bad(`could not fetch the ICE config from ${host} — ${err.message}`);
     process.exit(1);
   }
 

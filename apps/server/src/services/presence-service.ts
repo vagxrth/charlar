@@ -31,7 +31,8 @@ export class PresenceService {
         const session = this.sessionService.getById(sessionId);
         return {
           sessionId,
-          online: session?.socketId !== null,
+          // A member whose session is gone (undefined) is offline too.
+          online: Boolean(session?.socketId),
           nickname: session?.nickname ?? "Unknown",
         };
       }

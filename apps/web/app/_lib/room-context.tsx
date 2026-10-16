@@ -36,6 +36,7 @@ interface RoomContextValue {
   leaveRoom: () => void;
 }
 
+// Per tab, like the session it belongs to (see socket.ts).
 const ROOM_STORAGE_KEY = "charlar.room";
 
 const RoomContext = createContext<RoomContextValue | null>(null);
@@ -54,7 +55,7 @@ function readStoredRoom(): RoomState | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem(ROOM_STORAGE_KEY);
+    const raw = window.sessionStorage.getItem(ROOM_STORAGE_KEY);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as Partial<RoomState>;
@@ -88,9 +89,9 @@ function writeStoredRoom(room: RoomState | null): void {
 
   try {
     if (room) {
-      window.localStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(room));
+      window.sessionStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify(room));
     } else {
-      window.localStorage.removeItem(ROOM_STORAGE_KEY);
+      window.sessionStorage.removeItem(ROOM_STORAGE_KEY);
     }
   } catch {
     // Storage may be unavailable in private browsing or locked-down contexts.

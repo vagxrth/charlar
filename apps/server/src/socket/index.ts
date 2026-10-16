@@ -11,6 +11,7 @@ import {
   setSessionExpiryNotifier,
   typingService,
 } from "../services/index.js";
+import type { Session } from "../services/session-service.js";
 import { chatHandler } from "./handlers/chat.js";
 import { presenceHandler } from "./handlers/presence.js";
 import { roomsHandler } from "./handlers/rooms.js";
@@ -79,41 +80,45 @@ const REAP_INTERVAL_MS = 5 * 60_000;
 /**
  * Resolve or create a session for the connecting socket.
  *
- * If the client sends a previous sessionId in handshake auth and
- * that session is still within its grace period, reclaim it and
- * rejoin all Socket.IO rooms. Otherwise create a fresh session.
+ * A client reclaims its previous session by sending both the sessionId and
+ * the resumeToken it was given in `session:created`. Session IDs are shared
+ * with peers, so only the token proves ownership; without a matching token the
+ * client gets a fresh session and the current holder is left alone.
  *
- * Force-disconnects the old socket if it's still lingering (transport
- * race condition — the old socket hasn't fully closed yet).
+ * On a verified reclaim, force-disconnects the old socket if it's still
+ * lingering (transport race condition — it hasn't fully closed yet).
  */
 function resolveSession(
   io: Server,
   socket: Socket
-): { sessionId: string; reconnected: boolean } {
-  const previousId = socket.handshake.auth?.sessionId as string | undefined;
+): { session: Session; reconnected: boolean } {
+  const auth = (socket.handshake.auth ?? {}) as Record<string, unknown>;
+  const previousId = auth["sessionId"];
+  const resumeToken = auth["resumeToken"];
 
-  if (previousId) {
-    // Force-close stale socket before reclaiming
-    const existing = sessionService.getById(previousId);
-    if (existing?.socketId) {
-      const oldSocket = io.sockets.sockets.get(existing.socketId);
-      if (oldSocket && oldSocket.id !== socket.id) {
-        logger.warn(
-          { session: previousId.slice(0, 8), oldSocketId: existing.socketId },
-          "force-closing stale socket before reclaim"
-        );
-        oldSocket.disconnect(true);
+  if (typeof previousId === "string" && typeof resumeToken === "string") {
+    const existing = sessionService.verify(previousId, resumeToken);
+    if (existing) {
+      // Force-close stale socket before reclaiming
+      if (existing.socketId && existing.socketId !== socket.id) {
+        const oldSocket = io.sockets.sockets.get(existing.socketId);
+        if (oldSocket) {
+          logger.warn(
+            { session: previousId.slice(0, 8), oldSocketId: existing.socketId },
+            "force-closing stale socket before reclaim"
+          );
+          oldSocket.disconnect(true);
+        }
       }
-    }
 
-    const session = sessionService.reclaim(previousId, socket.id);
-    if (session) {
-      return { sessionId: session.id, reconnected: true };
+      const session = sessionService.reclaim(previousId, socket.id);
+      if (session) {
+        return { session, reconnected: true };
+      }
     }
   }
 
-  const session = sessionService.create(socket.id);
-  return { sessionId: session.id, reconnected: false };
+  return { session: sessionService.create(socket.id), reconnected: false };
 }
 
 export function initSocket(httpServer: HttpServer): Server {
@@ -158,7 +163,8 @@ export function initSocket(httpServer: HttpServer): Server {
   // ── Connection handler ─────────────────────────────────
 
   io.on("connection", (socket) => {
-    const { sessionId, reconnected } = resolveSession(io, socket);
+    const { session, reconnected } = resolveSession(io, socket);
+    const sessionId = session.id;
     socket.data.sessionId = sessionId;
 
     const tag = sessionId.slice(0, 8);
@@ -215,8 +221,9 @@ export function initSocket(httpServer: HttpServer): Server {
       logger.info({ session: tag }, "new session connected");
     }
 
-    // Send session ID to client so it can use it for reconnection
-    socket.emit("session:created", { sessionId });
+    // Send the session ID and its resume token to this client only, so it can
+    // reclaim the session after a reconnect
+    socket.emit("session:created", { sessionId, resumeToken: session.resumeToken });
 
     // Register domain handlers
     for (const handler of handlers) {

@@ -1,7 +1,12 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 export interface Session {
   id: string;
+  /**
+   * Secret proof of ownership, sent only to the session's own client. The
+   * session ID itself is shared with peers, so it cannot prove anything.
+   */
+  resumeToken: string;
   socketId: string | null;
   disconnectedAt: number | null;
   cleanupTimer: ReturnType<typeof setTimeout> | null;
@@ -51,6 +56,7 @@ export class SessionService {
   create(socketId: string): Session {
     const session: Session = {
       id: randomUUID(),
+      resumeToken: randomBytes(32).toString("base64url"),
       socketId,
       disconnectedAt: null,
       cleanupTimer: null,
@@ -63,8 +69,24 @@ export class SessionService {
   }
 
   /**
-   * Attempt to reclaim an existing session with a new socket.
-   * Returns the session if it exists and is in grace period, null otherwise.
+   * Return the session if `resumeToken` proves ownership of it, else null.
+   * Compared in constant time so the token can't be guessed byte by byte.
+   */
+  verify(sessionId: string, resumeToken: string): Session | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+
+    const expected = Buffer.from(session.resumeToken);
+    const given = Buffer.from(resumeToken);
+    if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
+      return null;
+    }
+    return session;
+  }
+
+  /**
+   * Rebind an existing session to a new socket, ending its grace period.
+   * Callers must check ownership with `verify` first.
    */
   reclaim(sessionId: string, newSocketId: string): Session | null {
     const session = this.sessions.get(sessionId);

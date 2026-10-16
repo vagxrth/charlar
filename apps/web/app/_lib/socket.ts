@@ -11,6 +11,13 @@ const SESSION_STORAGE_KEY = "charlar.session";
 // Earlier builds kept these in localStorage, which every tab shared.
 const LEGACY_LOCAL_KEYS = ["charlar.sessionId", "charlar.room"];
 
+/**
+ * How long to wait for the server to acknowledge a request before treating
+ * it as failed. The server drops events over its rate limit without replying,
+ * so without this a lost reply leaves the UI waiting forever.
+ */
+export const ACK_TIMEOUT_MS = 10_000;
+
 interface StoredSession {
   sessionId: string;
   resumeToken?: string;

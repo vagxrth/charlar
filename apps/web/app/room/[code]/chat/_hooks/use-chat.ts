@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRoom } from "../../../../_lib/room-context";
+import { ACK_TIMEOUT_MS } from "../../../../_lib/socket";
 import { useSocket } from "../../../../_lib/socket-context";
 
 export interface ChatMessage {
@@ -150,11 +151,14 @@ export function useChat() {
         }
       }
 
-      socket.emit(
+      socket.timeout(ACK_TIMEOUT_MS).emit(
         "chat:message",
         { roomCode, content },
-        (res: { ok: boolean; id?: string; timestamp?: number }) => {
-          if (res.ok && res.id && res.timestamp) {
+        (
+          err: Error | null,
+          res?: { ok: boolean; id?: string; timestamp?: number }
+        ) => {
+          if (!err && res?.ok && res.id && res.timestamp) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === tempId
@@ -163,7 +167,8 @@ export function useChat() {
               )
             );
           } else {
-            // Remove failed message
+            // Rejected, or no reply in time: remove the pending message
+            // rather than leaving it on "sending".
             setMessages((prev) => prev.filter((m) => m.id !== tempId));
           }
         }

@@ -1,4 +1,8 @@
-FROM coturn/coturn:latest
+# Pinned, so a rebuild can't pick up a new coturn release (and its config
+# changes) unannounced. To upgrade, change the tag and the digest together;
+# the digest is the multi-arch one from
+# `docker buildx imagetools inspect coturn/coturn:<tag>`.
+FROM coturn/coturn:4.18.0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
 
 USER root
 # gettext-base provides envsubst; curl queries the cloud metadata server.

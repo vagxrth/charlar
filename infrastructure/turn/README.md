@@ -19,7 +19,7 @@ The backend's `IceConfigService` generates ephemeral HMAC-SHA1 credentials that 
 
 1. Set `TURN_SECRET` identically in both `apps/server/.env` and `infrastructure/turn/.env`
 2. Set `TURN_URLS` in `apps/server/.env` to `turn:<your-server>:3478,turns:<your-server>:5349`
-3. Credentials are generated per-request and auto-expire (default 24 h)
+3. Credentials are generated per request, only for sessions in a room (over the socket's `ice:config`), and expire after `TURN_CREDENTIAL_TTL` (default 4 h)
 
 ## Security recommendations
 

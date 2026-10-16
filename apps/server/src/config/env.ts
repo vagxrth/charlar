@@ -15,5 +15,7 @@ export const config = {
   turnUsername: env["TURN_USERNAME"] ?? "",
   turnCredential: env["TURN_CREDENTIAL"] ?? "",
   turnSecret: env["TURN_SECRET"] ?? "",
-  turnCredentialTtl: Number(env["TURN_CREDENTIAL_TTL"] || 86_400),
+  // 4 hours. Coturn won't refresh an allocation once its credential has
+  // expired, so keep this above the longest relayed call you expect.
+  turnCredentialTtl: Number(env["TURN_CREDENTIAL_TTL"] || 14_400),
 } as const;

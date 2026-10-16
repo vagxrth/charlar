@@ -29,6 +29,7 @@ let session: StoredSession | null = readStoredSession();
 // Protocol features the connected server announced in session:created. The
 // web app can deploy before the server, so newer call shapes wait for these.
 let serverFeatures = new Set<string>();
+let featuresKnown = false;
 
 function readStoredSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
@@ -102,6 +103,7 @@ export function getSocket(): Socket {
       session = { sessionId: data.sessionId, resumeToken: data.resumeToken };
       storeSession(session);
       serverFeatures = new Set(Array.isArray(data.features) ? data.features : []);
+      featuresKnown = true;
     }
   );
 
@@ -118,4 +120,24 @@ export function getSessionId(): string | null {
 /** Whether the connected server announced support for a protocol feature. */
 export function serverSupports(feature: string): boolean {
   return serverFeatures.has(feature);
+}
+
+/**
+ * Resolve true once the server has announced its features, or false after
+ * `timeoutMs`. Needed right after a reload, before session:created arrives.
+ */
+export function whenServerKnown(timeoutMs: number): Promise<boolean> {
+  const s = socket;
+  if (featuresKnown || !s) return Promise.resolve(featuresKnown);
+
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      s.off("session:created", done);
+      resolve(featuresKnown);
+    };
+    const timer = setTimeout(done, timeoutMs);
+    // Registered after getSocket's own listener, so features are set by now.
+    s.on("session:created", done);
+  });
 }

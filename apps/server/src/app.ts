@@ -35,9 +35,11 @@ app.get("/health", (_req, res) => {
   });
 });
 
+// STUN only. TURN credentials go to room members over the socket
+// ("ice:config"); this endpoint stays for older clients, which then fall
+// back to STUN.
 app.get("/api/ice-config", apiLimiter, (_req, res) => {
-  const iceServers = iceConfigService.getIceServers();
-  res.json({ iceServers });
+  res.json({ iceServers: iceConfigService.getStunServers() });
 });
 
 export { app };

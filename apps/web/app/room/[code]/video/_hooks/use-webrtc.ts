@@ -349,7 +349,7 @@ export function useWebRTC() {
       try {
         const [stream, iceServers] = await Promise.all([
           getLocalStream(),
-          fetchIceServers(),
+          fetchIceServers(socket),
         ]);
 
         if (cancelled) {

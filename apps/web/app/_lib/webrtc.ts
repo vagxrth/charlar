@@ -3,11 +3,42 @@
  * ICE candidate queuing, and SDP negotiation.
  */
 
+import type { Socket } from "socket.io-client";
 import { env } from "./env";
+import { ACK_TIMEOUT_MS, serverSupports, whenServerKnown } from "./socket";
 
 // ── ICE config fetcher ──────────────────────────────────
 
-export async function fetchIceServers(): Promise<RTCIceServer[]> {
+/** How long to wait for the server's feature announcement after a reload. */
+const SERVER_KNOWN_TIMEOUT_MS = 5_000;
+
+/**
+ * ICE servers for a call. Room members get the full config (with TURN
+ * credentials) over the socket; a server without that feature, or a failed
+ * request, falls back to the HTTP endpoint.
+ */
+export async function fetchIceServers(socket: Socket): Promise<RTCIceServer[]> {
+  if ((await whenServerKnown(SERVER_KNOWN_TIMEOUT_MS)) && serverSupports("ice-config")) {
+    const servers = await requestOverSocket(socket);
+    if (servers) return servers;
+  }
+  return fetchOverHttp();
+}
+
+function requestOverSocket(socket: Socket): Promise<RTCIceServer[] | null> {
+  return new Promise((resolve) => {
+    socket
+      .timeout(ACK_TIMEOUT_MS)
+      .emit(
+        "ice:config",
+        (err: Error | null, res?: { ok: boolean; iceServers?: RTCIceServer[] }) => {
+          resolve(!err && res?.ok && Array.isArray(res.iceServers) ? res.iceServers : null);
+        }
+      );
+  });
+}
+
+async function fetchOverHttp(): Promise<RTCIceServer[]> {
   try {
     const res = await fetch(`${env.serverUrl}/api/ice-config`, {
       signal: AbortSignal.timeout(5_000),

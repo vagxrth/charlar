@@ -159,6 +159,43 @@ describe("sessions", () => {
   });
 });
 
+describe("ice config", () => {
+  type IceServer = { urls: string[]; username?: string; credential?: string };
+
+  it("announces ice-config support", async () => {
+    const a = mk();
+    expect((await sessionCreated(a)).features).toContain("ice-config");
+  });
+
+  it("gives the full config, with 4-hour TURN credentials, only to room members", async () => {
+    const a = mk();
+    await sessionCreated(a);
+
+    const outside = await emit<{ ok: boolean }>(a, "ice:config");
+    expect(outside.ok).toBe(false);
+
+    await emit(a, "room:create", "Alice", "video");
+    const inside = await emit<{ ok: boolean; iceServers: IceServer[] }>(a, "ice:config");
+    expect(inside.ok).toBe(true);
+
+    const turn = inside.iceServers.find((s) => s.urls.some((u) => u.startsWith("turn:")));
+    expect(turn?.credential).toBeTruthy();
+    // The username is the credential's expiry time (Unix seconds).
+    const ttl = Number(turn?.username) - Date.now() / 1000;
+    expect(ttl).toBeGreaterThan(14_400 - 60);
+    expect(ttl).toBeLessThanOrEqual(14_400);
+  });
+
+  it("serves STUN only over HTTP", async () => {
+    const res = await fetch(`${server.url}/api/ice-config`);
+    const { iceServers } = (await res.json()) as { iceServers: IceServer[] };
+
+    expect(iceServers.length).toBeGreaterThan(0);
+    expect(iceServers.flatMap((s) => s.urls).every((u) => u.startsWith("stun:"))).toBe(true);
+    expect(iceServers.some((s) => s.credential)).toBe(false);
+  });
+});
+
 describe("room mode", () => {
   it("announces room-mode support when a client connects", async () => {
     const a = mk();

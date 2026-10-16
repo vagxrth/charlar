@@ -31,7 +31,9 @@ interface RoomState {
 interface RoomContextValue {
   room: RoomState | null;
   createRoom: (mode: Mode, nickname?: string) => Promise<string>;
-  joinRoom: (code: string, mode: Mode, nickname?: string) => Promise<void>;
+  // The room's mode is fixed by whoever created it; join returns it so the
+  // joiner routes to the right page regardless of which mode they picked.
+  joinRoom: (code: string, nickname?: string) => Promise<Mode>;
   restoreRoom: (code: string, mode: Mode) => Promise<boolean>;
   leaveRoom: () => void;
 }
@@ -116,14 +118,15 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         socket.emit(
           "room:create",
           nickname ?? "",
-          (res: { ok: boolean; code?: string; nickname?: string; error?: string }) => {
+          mode,
+          (res: { ok: boolean; code?: string; mode?: Mode; nickname?: string; error?: string }) => {
             if (!res.ok || !res.code) {
               reject(new Error(res.error ?? "Failed to create room"));
               return;
             }
             setRoom({
               code: res.code,
-              mode,
+              mode: res.mode ?? mode,
               nickname: res.nickname ?? "Guest",
               participants: [],
               participantCount: 1,
@@ -136,7 +139,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   );
 
   const joinRoom = useCallback(
-    (code: string, mode: Mode, nickname?: string): Promise<void> =>
+    (code: string, nickname?: string): Promise<Mode> =>
       new Promise((resolve, reject) => {
         socket.emit(
           "room:join",
@@ -145,6 +148,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           (res: {
             ok: boolean;
             error?: string;
+            mode?: Mode;
             nickname?: string;
             participantCount?: number;
             participants?: Participant[];
@@ -153,6 +157,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               reject(new Error(res.error ?? "Failed to join room"));
               return;
             }
+            const mode: Mode = res.mode === "video" ? "video" : "chat";
             setRoom({
               code,
               mode,
@@ -160,7 +165,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
               participants: res.participants ?? [],
               participantCount: res.participantCount ?? 1,
             });
-            resolve();
+            resolve(mode);
           }
         );
       }),
@@ -178,6 +183,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           (res: {
             ok: boolean;
             error?: string;
+            mode?: Mode;
             participantCount?: number;
             participants?: Participant[];
           }) => {
@@ -198,7 +204,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
             setRoom({
               code,
-              mode,
+              mode: res.mode ?? mode,
               nickname:
                 ownParticipant?.nickname ??
                 storedRoom?.nickname ??

@@ -26,7 +26,13 @@ export function RoomGuard({
   useEffect(() => {
     let cancelled = false;
 
-    if (room?.code === code && room.mode === mode) {
+    if (room?.code === code) {
+      // The room's real mode wins over the one in the URL: a joiner who picked
+      // the wrong mode, or a stale link, gets sent to the correct page.
+      if (room.mode !== mode) {
+        router.replace(`/room/${code}/${room.mode}`);
+        return;
+      }
       setRestoring(false);
       return;
     }
@@ -39,11 +45,11 @@ export function RoomGuard({
     setRestoring(true);
     restoreRoom(code, mode).then((restored) => {
       if (cancelled) return;
-      if (restored) {
-        setRestoring(false);
-      } else {
+      if (!restored) {
         router.replace("/");
       }
+      // On success the room state is set; this effect re-runs and the branch
+      // above lands us on the right page (and clears `restoring`).
     });
 
     return () => {

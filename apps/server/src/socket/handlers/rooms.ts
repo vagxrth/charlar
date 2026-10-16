@@ -72,15 +72,15 @@ function deduplicateNickname(roomCode: string, nickname: string, selfId: string)
 }
 
 export const roomsHandler: SocketHandler = (io, socket) => {
-  socket.on("room:create", (rawNickname: unknown, rawCallback: unknown) => {
-    // Support old signature without nickname: (callback)
-    if (typeof rawNickname === "function") {
-      rawCallback = rawNickname;
-      rawNickname = undefined;
-    }
-    const callback = ensureCallback(rawCallback);
+  // Signatures, newest first: (nickname, mode, cb), (nickname, cb), (cb).
+  // The callback is always the last argument; nickname and mode are positional.
+  socket.on("room:create", (...args: unknown[]) => {
+    const callback = ensureCallback(args[args.length - 1]);
+    const rawNickname = typeof args[0] === "string" ? args[0] : undefined;
+    const mode = args[1] === "video" ? "video" : "chat";
+
     const sessionId = getSessionId(socket);
-    const result = roomService.createRoom(sessionId);
+    const result = roomService.createRoom(sessionId, mode);
 
     if (!result.ok) {
       callback({ ok: false, error: result.error });
@@ -92,8 +92,8 @@ export const roomsHandler: SocketHandler = (io, socket) => {
 
     const { code } = result.data;
     void socket.join(code);
-    logger.info({ session: sessionId.slice(0, 8), room: code, nickname }, "room created");
-    callback({ ok: true, code, participantCount: 1, nickname });
+    logger.info({ session: sessionId.slice(0, 8), room: code, nickname, mode }, "room created");
+    callback({ ok: true, code, mode, participantCount: 1, nickname });
   });
 
   socket.on(
@@ -134,13 +134,15 @@ export const roomsHandler: SocketHandler = (io, socket) => {
 
       const presence = presenceService.getRoomPresence(code, sessionId);
       const participantCount = presenceService.getParticipantCount(code);
+      const mode = roomService.getRoom(code)?.mode ?? "chat";
 
       socket.to(code).emit("room:peer-joined", { sessionId, nickname, participantCount });
-      logger.info({ session: sessionId.slice(0, 8), room: code, nickname }, "room joined");
+      logger.info({ session: sessionId.slice(0, 8), room: code, nickname, mode }, "room joined");
 
       callback({
         ok: true,
         nickname,
+        mode,
         participantCount,
         participants: presence.ok ? presence.data : [],
       });

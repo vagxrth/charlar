@@ -1,4 +1,4 @@
-import { presenceService } from "../../services/index.js";
+import { presenceService, roomService } from "../../services/index.js";
 import { RoomService } from "../../services/room-service.js";
 import { ensureCallback, getSessionId, type SocketHandler } from "../types.js";
 
@@ -23,6 +23,7 @@ export const presenceHandler: SocketHandler = (_io, socket) => {
 
       callback({
         ok: true,
+        mode: roomService.getRoom(roomCode)?.mode ?? "chat",
         participants: result.data,
         participantCount: result.data.length,
       });

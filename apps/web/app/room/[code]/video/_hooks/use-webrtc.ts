@@ -28,6 +28,13 @@ const DISCONNECTED_TIMEOUT_MS = 8_000;
  */
 const RESTART_WAIT_MS = 20_000;
 
+/**
+ * A connection still in "new" (offer sent, no answer yet) counts as live
+ * for this long, so near-simultaneous triggers don't rebuild it. Past that,
+ * its offer was probably lost and a later trigger may rebuild it.
+ */
+const STALE_NEW_PEER_MS = 10_000;
+
 export function useWebRTC() {
   const { socket, sessionId } = useSocket();
   const { room } = useRoom();
@@ -69,6 +76,9 @@ export function useWebRTC() {
   // The lower-id side's "give up if no restart offer arrives" timer.
   const giveUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // When the current peer connection was created (see STALE_NEW_PEER_MS).
+  const peerCreatedAtRef = useRef(0);
+
   // Set once camera/mic and ICE config are ready, so connection attempts
   // triggered by room changes know they can proceed.
   const mediaReadyRef = useRef(false);
@@ -105,12 +115,15 @@ export function useWebRTC() {
   /** True when we hold a connection to this peer that is up or coming up. */
   const hasLiveConnectionTo = useCallback((peerId: string): boolean => {
     const peer = peerRef.current;
+    if (peer === null || targetSessionIdRef.current !== peerId) return false;
+
+    const state = peer.connectionState;
+    if (state === "connected" || state === "connecting") return true;
+    // A fresh "new" connection is still waiting on its answer; a stale one
+    // lost its offer, so let the caller rebuild it.
     return (
-      peer !== null &&
-      targetSessionIdRef.current === peerId &&
-      (peer.connectionState === "connected" ||
-        peer.connectionState === "connecting" ||
-        peer.connectionState === "new")
+      state === "new" &&
+      Date.now() - peerCreatedAtRef.current < STALE_NEW_PEER_MS
     );
   }, []);
 
@@ -200,6 +213,7 @@ export function useWebRTC() {
 
       const peer = new PeerManager(iceServers);
       peerRef.current = peer;
+      peerCreatedAtRef.current = Date.now();
       peer.addLocalStream(stream);
 
       // Remote tracks → aggregate into a single MediaStream
@@ -264,6 +278,15 @@ export function useWebRTC() {
       setError(null);
 
       if (shouldOffer) {
+        // If the offer never gets out, drop this connection so a later
+        // reconnect builds a fresh one instead of waiting on it forever.
+        const abandon = () => {
+          if (peerRef.current === peer) {
+            peer.close();
+            peerRef.current = null;
+          }
+        };
+
         peer
           .createOffer()
           .then((sdp) => {
@@ -273,6 +296,7 @@ export function useWebRTC() {
               (res: { ok: boolean; error?: string }) => {
                 if (!res.ok) {
                   console.warn("[webrtc] Offer relay failed:", res.error);
+                  abandon();
                   setError("Failed to reach peer — they may have left");
                   setConnectionState("failed");
                 }
@@ -281,6 +305,7 @@ export function useWebRTC() {
           })
           .catch((err) => {
             console.error("[webrtc] Failed to create offer:", err);
+            abandon();
             setError("Failed to create offer");
             setConnectionState("failed");
           });

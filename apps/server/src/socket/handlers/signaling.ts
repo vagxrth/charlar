@@ -156,7 +156,9 @@ export const signalingHandler: SocketHandler = (io, socket) => {
         return;
       }
 
-      io.volatile.to(result.targetSocketId).emit("signal:ice-candidate", {
+      // Not volatile: candidates arrive in bursts, and volatile packets are
+      // dropped whenever the receiver's transport is mid-write.
+      io.to(result.targetSocketId).emit("signal:ice-candidate", {
         sessionId,
         candidate: payload.candidate,
       });

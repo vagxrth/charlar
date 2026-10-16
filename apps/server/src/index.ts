@@ -1,12 +1,8 @@
-import { createServer } from "node:http";
-
-import { app } from "./app.js";
 import { config } from "./config/env.js";
 import { logger } from "./logger.js";
-import { initSocket } from "./socket/index.js";
+import { createAppServer } from "./server.js";
 
-const server = createServer(app);
-const io = initSocket(server);
+const { server, io } = createAppServer();
 
 server.listen(config.port, () => {
   logger.info(

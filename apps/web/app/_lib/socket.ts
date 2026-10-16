@@ -31,6 +31,29 @@ let session: StoredSession | null = readStoredSession();
 let serverFeatures = new Set<string>();
 let featuresKnown = false;
 
+/**
+ * Call signaling that arrived while no video page was listening. The other
+ * person sends their offer the moment we join, often while this tab is still
+ * navigating from the lobby; without this it would be dropped and the call
+ * would never connect. Held briefly, then replayed when the video page mounts.
+ */
+export interface EarlySignal {
+  event: "signal:offer" | "signal:ice-candidate";
+  data: { sessionId: string } & Record<string, unknown>;
+  at: number;
+}
+
+const EARLY_SIGNAL_TTL_MS = 60_000;
+const EARLY_SIGNAL_LIMIT = 100;
+let earlySignals: EarlySignal[] = [];
+let signalConsumerAttached = false;
+
+function holdEarlySignal(event: EarlySignal["event"], data: EarlySignal["data"]): void {
+  if (signalConsumerAttached) return;
+  earlySignals.push({ event, data, at: Date.now() });
+  if (earlySignals.length > EARLY_SIGNAL_LIMIT) earlySignals.shift();
+}
+
 function readStoredSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
 
@@ -107,6 +130,11 @@ export function getSocket(): Socket {
     }
   );
 
+  socket.on("signal:offer", (data: EarlySignal["data"]) => holdEarlySignal("signal:offer", data));
+  socket.on("signal:ice-candidate", (data: EarlySignal["data"]) =>
+    holdEarlySignal("signal:ice-candidate", data)
+  );
+
   socket.connect();
 
   return socket;
@@ -115,6 +143,23 @@ export function getSocket(): Socket {
 /** Read the current session ID (null if not yet assigned by server). */
 export function getSessionId(): string | null {
   return session?.sessionId ?? null;
+}
+
+/**
+ * Called by the video page once its own signaling listeners are registered:
+ * stops holding signals and returns those that arrived earlier, oldest first.
+ */
+export function attachSignalConsumer(): EarlySignal[] {
+  signalConsumerAttached = true;
+  const cutoff = Date.now() - EARLY_SIGNAL_TTL_MS;
+  const held = earlySignals.filter((s) => s.at >= cutoff);
+  earlySignals = [];
+  return held;
+}
+
+/** Called when the video page unmounts, so signals are held again. */
+export function detachSignalConsumer(): void {
+  signalConsumerAttached = false;
 }
 
 /** Whether the connected server announced support for a protocol feature. */
